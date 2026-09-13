@@ -7,7 +7,7 @@
   }
   const blank = value => value === '' || value === null || value === undefined;
   const metrics = ['basic_salary', 'gross', 'employee_bpjs', 'employer_bpjs', 'pph', 'deductions',
-    'take_home_pay', 'employer_cost', 'employer_contributions', 'tax_allowance', 'employer_tax_cost'];
+    'take_home_pay', 'employer_cost', 'employer_contributions', 'bpjs_allowance', 'tax_allowance', 'employer_tax_cost'];
   const compared = ['basic_salary', 'gross', 'take_home_pay', 'employer_cost'];
   const empty = () => Object.fromEntries(metrics.map(key => [key, 0]).concat([['breakdown', []]]));
   function sum(values) {
@@ -20,10 +20,11 @@
   function scenarioPayroll(ws, employee, scenario) {
     const result = empty();
     const rules = ws.globalRules;
+    const taxPolicy = C.paymentPolicy(rules, scenario, 'pph');
     const breakdown = result.breakdown;
     result.basic_salary = C.resolveBasic(ws, employee, scenario);
     breakdown.push({ code: 'basic_salary', name: 'Basic salary', direction: 'earning', amount: result.basic_salary,
-      source: blank(employee[scenario + '_basic_override']) ? 'matrix' : 'override' });
+      source: 'matrix' });
     const definitions = new Map(ws.componentDefinitions.map(definition => [definition.code, definition]));
     const components = ws.employeeComponents.filter(assignment => assignment.employee_id === employee.employee_id)
       .map(assignment => ({ assignment, definition: definitions.get(assignment.component_code) }))
@@ -51,7 +52,7 @@
     const earnings = calculated.filter(row => row.direction === 'earning');
     result.gross = sum([result.basic_salary, ...earnings.map(row => row.amount)]);
     result.employer_contributions = sum(calculated.filter(row => row.direction === 'employer_contribution').map(row => row.amount));
-    const employeeContributions = [], employerContributions = [];
+    const employeeContributions = [], employerContributions = [], fundedContributions = [];
     for (const rule of [...ws.bpjsRules].sort((a, b) => a.code < b.code ? -1 : a.code > b.code ? 1 : 0)) {
       if (!rule.active) continue;
       const health = /kesehatan/i.test(rule.code);
@@ -64,30 +65,39 @@
       if (!blank(rule.maximum_basis)) basis = Math.min(basis, Number(rule.maximum_basis));
       const employeeAmount = rule.employee_enabled ? C.percent(basis, rule.employee_rate, rule.rounding) : 0;
       const employerAmount = rule.employer_enabled ? C.percent(basis, rule.employer_rate, rule.rounding) : 0;
+      const policy = C.paymentPolicy(rules, scenario, participation);
+      const allowance = policy === 'company' ? employeeAmount : 0;
+      fundedContributions.push(allowance);
       employeeContributions.push(employeeAmount);
       employerContributions.push(employerAmount);
       breakdown.push({ code: rule.code, name: rule.name, calculation_type: 'bpjs', raw_basis: rawBasis, basis,
         employee_rate: Number(rule.employee_rate), employer_rate: Number(rule.employer_rate),
-        employee_amount: employeeAmount, employer_amount: employerAmount });
+        employee_amount: employeeAmount, employer_amount: employerAmount, policy, bpjs_allowance: allowance });
     }
     result.employee_bpjs = sum(employeeContributions);
     result.employer_bpjs = sum(employerContributions);
+    // Fund the employee share after all contribution bases are calculated, avoiding a circular basis.
+    result.bpjs_allowance = sum(fundedContributions);
+    result.gross = sum([result.gross, result.bpjs_allowance]);
+    breakdown.push({ code: 'bpjs_allowance', name: 'Tunjangan BPJS porsi karyawan', direction: 'earning', amount: result.bpjs_allowance, source: 'company_paid_bpjs' });
     if (rules.tax_enabled) {
       const basis = rules.tax_basis === 'basic' ? result.basic_salary : rules.tax_basis === 'gross' ? result.gross :
-        sum([result.basic_salary, ...earnings.filter(row => row.definition.taxable).map(row => row.amount)]);
+        sum([result.basic_salary, result.bpjs_allowance, ...earnings.filter(row => row.definition.taxable).map(row => row.amount)]);
       const manual = !blank(employee.pph_fixed_override);
-      result.pph = manual ? C.roundMoney(employee.pph_fixed_override, rules.tax_rounding) : C.percent(basis, employee.pph_rate, rules.tax_rounding);
-      if (employee.pph_method === 'net') result.employer_tax_cost = result.pph;
-      if (employee.pph_method === 'gross_up') result.tax_allowance = result.pph;
-      breakdown.push({ code: 'pph', name: 'Estimasi PPh 21', calculation_type: 'tax', method: employee.pph_method,
-        basis, rate: blank(employee.pph_rate) ? null : Number(employee.pph_rate), amount: result.pph,
-        source: manual ? 'manual_override' : 'percentage', employee_amount: employee.pph_method === 'net' ? 0 : result.pph,
+      result.pph = manual ? C.roundMoney(employee.pph_fixed_override, rules.tax_rounding) : (taxPolicy === 'gross_up' ? C.grossUpTax : C.percent)(basis, employee.pph_rate, rules.tax_rounding);
+      result.tax_allowance = taxPolicy === 'gross_up' ? result.pph : 0;
+      result.employer_tax_cost = taxPolicy === 'net' ? result.pph : 0;
+      result.gross = sum([result.gross, result.tax_allowance]);
+      breakdown.push({ code: 'tax_allowance', name: 'Tunjangan PPh 21 (gross-up)', direction: 'earning', amount: result.tax_allowance, source: 'gross_up' });
+      breakdown.push({ code: 'pph', name: 'Estimasi PPh 21', calculation_type: 'tax', method: taxPolicy,
+        basis: sum([basis, result.tax_allowance]), basis_before_allowance: basis, rate: blank(employee.pph_rate) ? null : Number(employee.pph_rate), amount: result.pph,
+        source: manual ? 'manual_override' : taxPolicy === 'gross_up' ? 'gross_up' : 'percentage', employee_amount: taxPolicy === 'net' ? 0 : result.pph,
         employer_tax_cost: result.employer_tax_cost, tax_allowance: result.tax_allowance });
     }
-    result.deductions = sum([result.employee_bpjs, employee.pph_method === 'net' ? 0 : result.pph,
+    result.deductions = sum([result.employee_bpjs, taxPolicy === 'net' ? 0 : result.pph,
       ...calculated.filter(row => row.direction === 'employee_deduction').map(row => row.amount)]);
-    result.take_home_pay = sum([result.gross, result.tax_allowance, -result.deductions]);
-    result.employer_cost = sum([result.gross, result.tax_allowance, result.employer_bpjs, result.employer_contributions, result.employer_tax_cost]);
+    result.take_home_pay = sum([result.gross, -result.deductions]);
+    result.employer_cost = sum([result.gross, result.employer_bpjs, result.employer_contributions, result.employer_tax_cost]);
     return result;
   }
   C.calculatePayroll = function (ws) {

@@ -8,6 +8,17 @@ const C = globalThis.Caroll;
 const U = C.ui;
 const form = values => ({ elements: { namedItem: key => values[key] === undefined ? null : { value: values[key] } } });
 
+test('employee form only permits matrix salary selection while retaining tax overrides', () => {
+  const keys = U.schemas.employees.map(spec => spec.key);
+  assert.ok(!keys.includes('current_basic_override'));
+  assert.ok(!keys.includes('proposed_basic_override'));
+  assert.ok(keys.includes('current_golongan'));
+  assert.ok(keys.includes('proposed_golongan'));
+  assert.ok(keys.includes('pph_fixed_override'));
+  assert.ok(!keys.includes('pph_method'));
+  assert.match(U.translate('current basic salary override is disabled and ignored; salary follows matrix'), /dinonaktifkan dan diabaikan/);
+});
+
 test('percentage scaling retains decimal digits, sign, zero, blanks and exponent notation', () => {
   for (const [input, stored, displayed] of [
     ['0.35', '0.0035', '0.35'], ['9', '0.09', '9'], ['-0.35', '-0.0035', '-0.35'],

@@ -11,7 +11,7 @@
     component_definition: 'code name category direction calculation_type default_value taxable bpjs_kesehatan bpjs_ketenagakerjaan applies_current applies_proposed active rounding notes'.split(' '),
     employee_component: 'employee_id component_code current_value proposed_value'.split(' '),
     bpjs_rule: 'code name employee_rate employer_rate minimum_basis maximum_basis basis employee_enabled employer_enabled rounding active'.split(' '),
-    global_rule: 'currency rounding percentage_precision include_inactive allow_negative_thp proposed_defaults_current tax_enabled tax_basis tax_rounding'.split(' ')
+    global_rule: 'currency rounding percentage_precision include_inactive allow_negative_thp proposed_defaults_current tax_enabled tax_basis tax_rounding'.split(' ').concat(Object.keys(C.paymentPolicies))
   };
   const collections = { matrix: 'matrices', matrix_entry: 'matrixEntries', employee: 'employees', component_definition: 'componentDefinitions', employee_component: 'employeeComponents', bpjs_rule: 'bpjsRules' };
   const workspaceHeaders = ['schema_version', 'record_type', 'record_id', ...new Set(Object.values(fields).flat())];
@@ -23,6 +23,7 @@
   const integerFields = new Set(['salary_group', 'kmk_level', 'percentage_precision', 'rounding', 'tax_rounding']);
   const nullableFields = new Set('current_basic_override proposed_basic_override pph_fixed_override minimum_basis maximum_basis current_value proposed_value'.split(' '));
   const enums = {
+    ...C.paymentPolicies,
     scenario: ['current', 'proposed'],
     direction: ['earning', 'employee_deduction', 'employer_contribution'],
     calculation_type: ['fixed', 'percentage_basic', 'percentage_gross', 'manual'],
@@ -117,7 +118,7 @@
     const record = {};
     for (const field of fields[type]) {
       if (partial && !own(source, field)) continue;
-      const raw = source[field];
+      const raw = blank(source[field]) && own(C.paymentPolicies, field) ? (field.includes('_pph_') ? 'gross_up' : 'company') : source[field];
       if (blank(raw)) {
         if (required[type].includes(field) || booleanFields.has(field) || (numberFields.has(field) && !nullableFields.has(field) && field !== 'pph_rate' && !(field === 'default_value' && source.calculation_type === 'manual'))) fail(`${type}.${field} is required.`);
         record[field] = '';
@@ -228,7 +229,7 @@
   }
   function importWorkspace(text) {
     const { headers, records } = table(text);
-    checkHeaders(headers, workspaceHeaders, workspaceHeaders.filter(h => h !== 'generator_settings'));
+    checkHeaders(headers, workspaceHeaders, workspaceHeaders.filter(h => h !== 'generator_settings' && !own(C.paymentPolicies, h)));
     const ws = C.createWorkspace();
     for (const collection of Object.values(collections)) ws[collection] = [];
     ws.schemaVersion = 1;
@@ -263,7 +264,7 @@
   }
   function exportEmployees(ws) { return stringify(ws.employees.map(r => normalize('employee', r, false, ws)), employeeFields); }
   function employeeDefaults() {
-    return { employee_id: '', name: '', current_golongan: '', unit: '', department: '', position: '', employment_status: '', join_date: '', active: true, proposed_golongan: '', current_basic_override: '', proposed_basic_override: '', ptkp_status: '', bpjs_kesehatan: true, bpjs_ketenagakerjaan: true, pph_method: 'gross', pph_rate: 0, pph_fixed_override: '', notes: '' };
+    return { employee_id: '', name: '', current_golongan: '', unit: '', department: '', position: '', employment_status: '', join_date: '', active: true, proposed_golongan: '', current_basic_override: '', proposed_basic_override: '', ptkp_status: '', bpjs_kesehatan: true, bpjs_ketenagakerjaan: true, pph_method: 'gross_up', pph_rate: 0, pph_fixed_override: '', notes: '' };
   }
   function preview(ws, operation) {
     const result = { workspace: clone(ws), added: 0, updated: 0, unchanged: 0, rejected: 0, issues: [] };

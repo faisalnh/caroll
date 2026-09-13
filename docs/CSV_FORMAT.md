@@ -2,6 +2,12 @@
 
 `js/csv.js` is a classic script that installs `globalThis.Caroll.csv`. Load core state, matrix/money, and validation scripts before calling its workspace APIs. No API writes storage, changes the input workspace, or applies an import to the UI.
 
+## Scenario payment policies (supersedes fixed gross-up/company-paid descriptions below)
+
+Six optional columns apply to `global_rule`: `current_pph_policy`, `proposed_pph_policy` (`unconfirmed`, `gross`, `net`, `gross_up`); `current_bpjs_kesehatan_policy`, `proposed_bpjs_kesehatan_policy`, `current_bpjs_ketenagakerjaan_policy`, `proposed_bpjs_ketenagakerjaan_policy` (`unconfirmed`, `employee`, `company`). Nonempty invalid values are rejected. Missing/blank fields in older files normalize to `gross_up` for PPh and `company` for BPJS, preserving previous calculations. New exports include these columns; older application versions may reject them.
+
+Scenario policy overrides legacy employee `pph_method`. Gross deducts tax from THP, net records it as `employer_tax_cost` outside gross without employee tax deduction, gross-up adds equal tax allowance/deduction. Only company-funded BPJS employee shares enter `bpjs_allowance`. Cost = gross + employer BPJS + other employer contributions + net employer tax. Unconfirmed policies block relevant active calculations but drafts can be saved. See USER_GUIDE for new-workspace defaults and settings.
+
 ## Encoding and syntax
 
 Exports are UTF-8 text beginning with U+FEFF (BOM), comma-delimited, with CRLF record endings and a final CRLF. Callers creating downloads should use `text/csv;charset=utf-8`. Embedded commas, double quotes, CR and LF are quoted; embedded quotes are doubled. Imports accept CRLF or LF record separators and an optional leading BOM. Bare CR outside quoted cells, unterminated quotes, bare-field quotes, characters after closing quotes, inconsistent field counts, and duplicate/blank/padded headers are errors. Quoted multiline text and Unicode are preserved. A header-only file is valid; an empty file is not. Empty lines are not silently skipped (a single-column empty record is valid).
@@ -78,15 +84,17 @@ Fields in stable order:
 | `join_date` | Optional ISO date |
 | `active` | Required boolean |
 | `proposed_golongan` | Optional code; blank uses current if global rule enables it |
-| `current_basic_override` | Optional nonnegative money; blank derives from matrix, zero is explicit |
-| `proposed_basic_override` | Optional nonnegative money, same blank semantics |
+| `current_basic_override` | Compatibility-only legacy field; preserved but never used in calculation; any nonblank value (including zero) warns that it is ignored |
+| `proposed_basic_override` | Compatibility-only legacy field; preserved but never used in calculation; any nonblank value (including zero) warns that it is ignored |
 | `ptkp_status` | Optional status text; blank may warn |
 | `bpjs_kesehatan` | Required participation boolean |
 | `bpjs_ketenagakerjaan` | Required participation boolean |
-| `pph_method` | `gross`, `net`, or core spelling `gross_up`; input alias `gross-up` accepted |
-| `pph_rate` | Nonnegative decimal fraction; may be blank when tax is disabled or overridden |
-| `pph_fixed_override` | Optional nonnegative monthly tax money; blank calculates, zero overrides |
+| `pph_method` | Compatibility field: `gross`, `net`, or core spelling `gross_up`; input alias `gross-up` accepted. Legacy `gross`/`net` values are preserved in CSV but ignored with a warning; all employees/scenarios use `gross_up` when tax is enabled. The employee form has no method selector and saves `gross_up` |
+| `pph_rate` | Decimal fraction; required with `0 <= rate < 1` when tax is enabled and no fixed override exists; may be blank when tax is disabled or overridden |
+| `pph_fixed_override` | Optional nonnegative monthly tax money; blank calculates, zero overrides. When tax is enabled, used directly as final PPh and equal tax allowance, without further gross-up |
 | `notes` | Optional employee text |
+
+Both basic salary override columns remain in workspace and employee CSV for compatibility; legacy data is preserved, but the employee UI no longer allows editing them. Each calculated scenario requires exactly one matching matrix entry: current Golongan in the current matrix, and proposed Golongan in the proposed matrix. If `proposed_defaults_current` is enabled, a blank proposed Golongan falls back to the current Golongan **code only**, still looking up the proposed matrix. Missing or ambiguous matches block calculation regardless of legacy override values. PPh and employee component overrides are unchanged.
 
 #### `component_definition` → `componentDefinitions`
 
@@ -94,7 +102,7 @@ Fields: `code!`, `name!`, `category`, `direction!`, `calculation_type!`, `defaul
 
 - `code`: unique component identifier; `name`: display name; `category`: optional classification text.
 - `direction`: `earning`, `employee_deduction`, or `employer_contribution`.
-- `calculation_type`: `fixed`, `percentage_basic`, `percentage_gross`, or `manual`.
+- `calculation_type`: `fixed`, `percentage_basic`, `percentage_gross`, or `manual`. `percentage_gross` continues to use basic salary plus non-percentage-gross earnings, excluding all percentage-gross components and both BPJS and tax allowances. These components are calculated before either allowance to avoid cycles.
 - `default_value`: required numeric value except manual definitions may leave it blank. Money for fixed/manual; decimal fraction for percentage formulas. Signed values are supported.
 - `taxable`: whether included in taxable basis.
 - `bpjs_kesehatan`, `bpjs_ketenagakerjaan`: whether included in the corresponding selected contribution basis (not employee participation on this record type).
@@ -119,10 +127,12 @@ Fields: `code!`, `name!`, `employee_rate!`, `employer_rate!`, `minimum_basis`, `
 - `code`: unique program identifier; `name`: display name.
 - `employee_rate`, `employer_rate`: nonnegative decimal fractions.
 - `minimum_basis`, `maximum_basis`: optional nonnegative money; minimum cannot exceed maximum. Blank means no configured bound; zero is explicit.
-- `basis`: `basic`, `selected`, or `gross`.
+- `basis`: `basic`, `selected`, or `gross`; all BPJS bases are calculated before both BPJS and tax allowances, including when `gross` is selected, to avoid cycles.
 - `employee_enabled`, `employer_enabled`: enable each contribution side.
 - `rounding`: integer `1`, `100`, or `1000` rupiah.
 - `active`: enable program.
+
+Employee participation, basis bounds, contribution rounding, and active/employee/employer enable flags are unchanged. The company funds the calculated employee share through `bpjs_allowance = employee_bpjs`, added to gross while the equal employee BPJS deduction remains. This calculated allowance is independent of `tax_enabled` and is zero when the employee contribution is zero; it is not a new workspace input. Employer BPJS remains a separate employer cost.
 
 #### `global_rule` → `globalRules` (exactly one)
 
@@ -133,10 +143,12 @@ Fields: `currency!`, `rounding!`, `percentage_precision!`, `include_inactive!`, 
 - `percentage_precision`: display precision; current core requires `2`.
 - `include_inactive`: include inactive employees in calculation.
 - `allow_negative_thp`: permit negative take-home pay.
-- `proposed_defaults_current`: blank proposed Golongan defaults to current.
-- `tax_enabled`: enable Estimasi PPh 21.
-- `tax_basis`: `taxable`, `gross`, or `basic`.
+- `proposed_defaults_current`: blank proposed Golongan defaults to the current Golongan code only; salary still requires a unique match in the proposed matrix.
+- `tax_enabled`: enable Estimasi PPh 21 for all employees/scenarios using enforced `gross_up`. Toggle behavior is unchanged: disabling tax sets PPh and tax allowance to zero, including with a fixed override, but does not disable the BPJS allowance.
+- `tax_basis`: `taxable`, `gross`, or `basic`; selects the basis before the tax allowance. Both `taxable` and `gross` include the BPJS allowance; `basic` remains basic salary only.
 - `tax_rounding`: tax calculation step, `1`, `100`, or `1000`.
+
+When tax is enabled without a fixed override, the fixed effective-rate estimate is `pph = round(basis_before_allowance * pph_rate / (1 - pph_rate))`, using exact decimal arithmetic and final rounding by `tax_rounding`. This is true gross-up for a fixed rate, not a statutory TER/progressive model. A fixed override (including zero) is already the final tax and allowance, not a basis to gross up.
 
 A complete runnable workspace example, including every record type, can be obtained in the app console with `Caroll.csv.exportWorkspace(Caroll.sampleWorkspace())`. An empty workspace uses the identical header. Do not use a shortened conceptual workspace header for import.
 
@@ -148,7 +160,7 @@ A complete runnable workspace example, including every record type, can be obtai
 - `update`: add-and-update by ID. Requires only the `employee_id` header for patch files. Existing records change **only provided columns**; omitted columns and their types remain untouched. Explicit blank optional fields clear existing values. New IDs still need a name and, if active, a resolvable current Golongan. Never matches by name. Warns on changed names and existing employees absent from the file.
 - `replace`: requires the same headers as add, rebuilds employees using defaults, and requires explicit UI confirmation. Existing component assignments are retained; removing an employee referenced by an assignment is rejected rather than silently losing assignments.
 
-New/replacement employee defaults: blank optional text and overrides, `active=true`, both BPJS participation flags `true`, `pph_method=gross`, `pph_rate=0`. Duplicate IDs within any file are rejected. IDs are trimmed but leading zeroes are retained.
+New/replacement employee defaults: blank optional text and overrides, `active=true`, both BPJS participation flags `true`, `pph_method=gross_up`, `pph_rate=0`. Duplicate IDs within any file are rejected. IDs are trimmed but leading zeroes are retained.
 
 ```csv
 employee_id,name,current_golongan,proposed_golongan,current_basic_override
@@ -195,7 +207,7 @@ Complete stable result columns in order and their sources:
 | `employee_id,name,unit,department,current_golongan,proposed_golongan` | Employee identity/context fields |
 | `current_basic_salary,proposed_basic_salary` | Scenario `basic_salary`, integer money |
 | `basic_change,basic_change_percent` | `changes.basic_salary.amount` / `.percent` |
-| `current_gross,proposed_gross` | Scenario `gross`, money |
+| `current_gross,proposed_gross` | Scenario `gross`, money, including `bpjs_allowance = employee_bpjs` and `tax_allowance = pph` |
 | `gross_change,gross_change_percent` | `changes.gross.amount` / `.percent` |
 | `current_employee_bpjs,proposed_employee_bpjs` | Scenario `employee_bpjs`, money |
 | `current_employer_bpjs,proposed_employer_bpjs` | Scenario `employer_bpjs`, money |
@@ -206,6 +218,10 @@ Complete stable result columns in order and their sources:
 | `current_employer_cost,proposed_employer_cost` | Scenario `employer_cost`, money |
 | `employer_cost_change` | `changes.employer_cost.amount`, money |
 | `validation_status` | `warning` if employee has warning issues, otherwise `valid` |
+
+The breakdown shows `bpjs_allowance` as an earning and retains the equal employee BPJS deduction; organization totals in the UI also show the new `bpjs_allowance` metric for both scenarios. The tax allowance and equal PPh deduction remain separate breakdown lines. Thus THP is reported gross minus employee BPJS, PPh, and other employee deductions, or gross before both allowances minus other employee deductions. The BPJS allowance and deduction offset rather than both increasing cash THP. Compared with the old model without the BPJS allowance, with other inputs unchanged, THP rises by the formerly deducted employee BPJS share.
+
+Employer cost is `cost = gross + employer_bpjs + employer_contributions` (other employer contributions): gross already includes both allowances exactly once. Employer BPJS stays separate; do not add employee BPJS or either allowance again. The core compatibility metric `employer_tax_cost` remains zero because tax is already in gross. Existing gross CSV columns include the BPJS allowance; no new result CSV column is planned for `bpjs_allowance`, and neither `employer_tax_cost` nor `tax_allowance` adds a column.
 
 ## API clarifications / deviations
 

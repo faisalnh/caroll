@@ -94,7 +94,7 @@
     } else main.append(U.table(['Golongan', 'Kelompok', 'Kategori', 'KMK', 'Gaji pokok', 'Matriks', 'Catatan', 'Tindakan'], entries.map(e => [h('strong', {}, e.golongan), e.salary_group, e.professional_category, e.kmk_level, U.amount(e.basic_salary), e.matrix_id, h('span', { title: e.note || '' }, e.note || '—'), controls('edit', rows('matrixEntries').indexOf(e), 'matrixEntries', true)])));
   }
   function employeeIssues(e) { return state.issues.filter(i => i.employee_id === e.employee_id); }
-  const isOverride = e => ['current_basic_override', 'proposed_basic_override', 'pph_fixed_override'].some(k => e[k] !== '' && e[k] !== undefined && e[k] !== null);
+  const isOverride = e => ['pph_fixed_override'].some(k => e[k] !== '' && e[k] !== undefined && e[k] !== null);
   function filteredEmployees() {
     const f = state.filters;
     return rows('employees').filter(e => (!f.search || (e.employee_id + ' ' + e.name).toLocaleLowerCase('id').includes(f.search.toLocaleLowerCase('id'))) && (!f.unit || e.unit === f.unit) && (!f.department || e.department === f.department) && (!f.golongan || e.current_golongan === f.golongan || e.proposed_golongan === f.golongan) && (!f.active || String(Boolean(e.active)) === f.active) && (!f.validation || (f.validation === 'clean' ? !employeeIssues(e).length : employeeIssues(e).some(i => i.severity === f.validation))));
@@ -112,8 +112,7 @@
   }
   function basicCell(e, scenario) {
     const value = C.resolveBasic(ws(), e, scenario);
-    const override = e[scenario + '_basic_override'];
-    return h('div', {}, value === null ? U.badge('Gaji belum terpetakan', 'error') : U.amount(value), override !== '' && override !== undefined && override !== null ? h('div', {}, U.badge('Override manual', 'override')) : null);
+    return h('div', {}, value === null ? U.badge('Gaji belum terpetakan', 'error') : U.amount(value));
   }
   function renderComponents(main) {
     main.append(U.heading(...sections.components, U.button('Tetapkan ke karyawan', 'assign', {}, 'primary'), U.button('Tambah komponen', 'edit', { collection: 'componentDefinitions' })));
@@ -130,10 +129,11 @@
   function renderRules(main) {
     main.append(U.heading(...sections.rules, U.button('Edit aturan global & pajak', 'edit-rules', {}, 'primary')));
     main.append(U.notice('Tarif hukum tidak diasumsikan. Verifikasi tarif, batas upah, kepesertaan, dan basis bersama pengelola payroll. Estimasi PPh 21 adalah model bulanan sederhana, bukan perhitungan pajak resmi atau rekonsiliasi tahunan.'));
+    main.append(U.panel('Skema pembayaran PPh & BPJS', U.object(Object.fromEntries(U.schemas.paymentPolicies.map(s => [s.label, s.options.find(([value]) => value === (ws().globalRules[s.key] || s.default))?.[1] || 'Tidak valid']))), U.button('Atur skema pembayaran', 'edit-payment-policies', {}, 'primary')));
     main.append(U.panel('Aturan BPJS', U.table(['Program', 'Tarif karyawan', 'Tarif pemberi kerja', 'Minimum basis', 'Maksimum basis', 'Basis', 'Status', 'Tindakan'], rows('bpjsRules').map((r, index) => [r.name + ' (' + r.code + ')', U.rateDisplay(r.employee_rate) + (r.employee_enabled ? '' : ' · nonaktif'), U.rateDisplay(r.employer_rate) + (r.employer_enabled ? '' : ' · nonaktif'), r.minimum_basis === '' || r.minimum_basis == null ? 'Tanpa batas' : U.amount(r.minimum_basis), r.maximum_basis === '' || r.maximum_basis == null ? 'Tanpa batas' : U.amount(r.maximum_basis), { basic: 'Gaji pokok', selected: 'Pokok + terpilih', gross: 'Bruto' }[r.basis] || r.basis, U.badge(r.active ? 'Aktif' : 'Nonaktif'), controls('edit', index, 'bpjsRules')])), U.button('Tambah program', 'edit', { collection: 'bpjsRules' }, 'small')));
-    main.append(h('div', { class: 'two-column' }, U.panel('Aturan global', U.object(Object.fromEntries(U.schemas.globalRules.filter(s => !s.key.startsWith('tax_')).map(s => [s.label, ws().globalRules[s.key]])))), U.panel('Estimasi PPh 21', h('div', {}, U.object(Object.fromEntries(U.schemas.globalRules.filter(s => s.key.startsWith('tax_')).map(s => [s.label, ws().globalRules[s.key]]))), h('p', { class: 'muted' }, 'Metode gross / net / gross-up, PTKP, tarif manual, dan override pajak diatur pada formulir setiap karyawan.'), U.button('Kelola pengaturan karyawan', 'navigate', { section: 'employees' })))));
+    main.append(h('div', { class: 'two-column' }, U.panel('Aturan global', U.object(Object.fromEntries(U.schemas.globalRules.filter(s => !s.key.startsWith('tax_')).map(s => [s.label, ws().globalRules[s.key]])))), U.panel('Estimasi PPh 21', h('div', {}, U.object(Object.fromEntries(U.schemas.globalRules.filter(s => s.key.startsWith('tax_')).map(s => [s.label, ws().globalRules[s.key]]))), h('p', { class: 'muted' }, 'Skema PPh dan BPJS ditetapkan terpisah untuk saat ini/usulan pada pengaturan skema pembayaran. Basis iuran tetap sebelum tunjangan BPJS/PPh. PTKP, tarif, dan override nominal pajak diatur pada formulir karyawan.'), U.button('Kelola pengaturan karyawan', 'navigate', { section: 'employees' })))));
   }
-  const metricKeys = ['basic_salary', 'gross', 'employee_bpjs', 'employer_bpjs', 'pph', 'deductions', 'take_home_pay', 'employer_contributions', 'tax_allowance', 'employer_tax_cost', 'employer_cost'];
+  const metricKeys = ['basic_salary', 'gross', 'employee_bpjs', 'employer_bpjs', 'pph', 'deductions', 'take_home_pay', 'employer_contributions', 'bpjs_allowance', 'tax_allowance', 'employer_tax_cost', 'employer_cost'];
   function resultEmployees(result) {
     const ids = new Set(filteredEmployees().map(e => e.employee_id));
     return result.employees.filter(r => {
@@ -205,7 +205,7 @@
     }
     if (collection === 'componentDefinitions' && record.calculation_type?.startsWith('percentage')) record.default_value = U.rateToPercent(record.default_value);
     const names = { employees: 'karyawan', matrices: 'matriks', matrixEntries: 'entri matriks', componentDefinitions: 'komponen', bpjsRules: 'program BPJS' };
-    const extra = collection === 'employees' ? h('div', {}, U.notice('Nominal menggunakan rupiah bulat tanpa pemisah ribuan. Override kosong memakai matriks; 0 berarti gaji nol. Tarif pajak tidak ditetapkan otomatis.'), U.issues(existing ? employeeIssues(existing) : []), h('datalist', { id: 'golongan-list' }, unique(rows('matrixEntries').map(e => e.golongan)).map(code => h('option', { value: code })))) : collection === 'bpjsRules' ? U.notice('Masukkan tarif yang sudah diverifikasi. Tidak ada tarif hukum bawaan; kolom persen 1 berarti 1%.') : null;
+    const extra = collection === 'employees' ? h('div', {}, U.notice('Gaji pokok saat ini dan usulan selalu mengikuti matriks berdasarkan golongan. Override gaji pokok dinonaktifkan, termasuk nilai lama dari CSV. Nominal pajak menggunakan rupiah bulat tanpa pemisah ribuan. Skema PPh dan BPJS mengikuti pengaturan saat ini/usulan di Aturan perhitungan. Tarif pajak tidak ditetapkan otomatis.'), U.issues(existing ? employeeIssues(existing) : []), h('datalist', { id: 'golongan-list' }, unique(rows('matrixEntries').map(e => e.golongan)).map(code => h('option', { value: code })))) : collection === 'bpjsRules' ? U.notice('Masukkan tarif yang sudah diverifikasi. Tidak ada tarif hukum bawaan; kolom persen 1 berarti 1%.') : null;
     U.form((existing && !duplicate ? 'Edit ' : duplicate ? 'Duplikat ' : 'Tambah ') + names[collection], schema, record, (data) => {
       const target = existing && !duplicate ? Number(index) : -1;
       const key = { employees: 'employee_id', matrices: 'matrix_id', componentDefinitions: 'code', bpjsRules: 'code' }[collection];
@@ -213,6 +213,10 @@
       if (collection === 'matrices' && rows('matrices').some((m, i) => i !== target && m.scenario === data.scenario)) throw new Error('Hanya satu matriks diperbolehkan per skenario. Edit matriks yang sudah ada atau pilih skenario lain.');
             if (collection === 'employees' && data.active && !data.current_golongan) throw new Error('Golongan saat ini wajib untuk karyawan aktif.');
             if (collection === 'employees') {
+              // Preserve legacy data for CSV compatibility, never as a salary source.
+              data.current_basic_override = existing?.current_basic_override ?? '';
+              data.proposed_basic_override = existing?.proposed_basic_override ?? '';
+              data.pph_method = 'gross_up';
               for (const key of ['current_golongan', 'proposed_golongan']) {
                 if (!data[key]) continue;
                 const parsed = C.parseGolongan(data[key]);
@@ -349,7 +353,7 @@
           const matches = existing.filter(old => old.golongan === e.golongan);
           return [e.golongan, matches.length ? matches.map(old => U.amount(old.basic_salary)) : '—', U.amount(e.basic_salary)];
         }));
-        U.confirm('Pratinjau matriks otomatis · ' + (scenario === 'current' ? 'Saat ini' : 'Usulan'), h('div', {}, U.notice(dirtyWarning() + existing.length + ' entri yang cocok pada skenario ini akan diganti, termasuk edit manual dan entri dari identitas matriks lain. Golongan di luar KG 1–5 / PM,P,M,U / KMK 1–15 tetap dipertahankan. Override karyawan tidak berubah. Belum ada perubahan sampai diterapkan.'), preview), () => {
+        U.confirm('Pratinjau matriks otomatis · ' + (scenario === 'current' ? 'Saat ini' : 'Usulan'), h('div', {}, U.notice(dirtyWarning() + existing.length + ' entri yang cocok pada skenario ini akan diganti, termasuk edit manual dan entri dari identitas matriks lain. Golongan di luar KG 1–5 / PM,P,M,U / KMK 1–15 tetap dipertahankan. Gaji pokok karyawan mengikuti matriks; override gaji pokok lama diabaikan. Belum ada perubahan sampai diterapkan.'), preview), () => {
           mutate(w => {
             let matrix = w.matrices.find(m => m.matrix_id === matrixId);
             if (!matrix) { matrix = { matrix_id: matrixId, scenario, name: 'Matriks otomatis · ' + (scenario === 'current' ? 'Saat ini' : 'Usulan'), effective_date: '' }; w.matrices.push(matrix); }
@@ -460,7 +464,7 @@
     const r = state.result?.employees.find(e => e.employee_id === id);
     if (!r) return;
     const employee = rows('employees').find(e => e.employee_id === id);
-    U.dialog('Rincian · ' + r.name + ' (' + id + ')', h('div', {}, isOverride(employee) ? U.notice('OVERRIDE MANUAL — gaji pokok dan/atau pajak menggunakan nilai eksplisit. Lihat input di bawah untuk membedakan nilai nol dari nilai kosong.') : null, U.table(['Ukuran', 'Saat ini', 'Usulan'], metricKeys.map(key => [U.labels[key], U.amount(r.current[key]), U.amount(r.proposed[key])])), U.issues(r.issues), h('div', { class: 'two-column' }, h('section', {}, h('h3', {}, 'Rincian perhitungan saat ini'), U.object(r.current.breakdown)), h('section', {}, h('h3', {}, 'Rincian perhitungan usulan'), U.object(r.proposed.breakdown))), h('details', {}, h('summary', {}, 'Input karyawan & penugasan'), U.object(employee), U.object(rows('employeeComponents').filter(a => a.employee_id === id)))), [U.button('Edit karyawan', 'edit', { collection: 'employees', index: rows('employees').indexOf(employee) }, 'primary')]);
+    U.dialog('Rincian · ' + r.name + ' (' + id + ')', h('div', {}, isOverride(employee) ? U.notice('OVERRIDE PAJAK — PPh menggunakan nilai eksplisit. Gaji pokok tetap mengikuti matriks. Lihat input di bawah untuk membedakan nilai nol dari nilai kosong.') : null, U.table(['Ukuran', 'Saat ini', 'Usulan'], metricKeys.map(key => [U.labels[key], U.amount(r.current[key]), U.amount(r.proposed[key])])), U.issues(r.issues), h('div', { class: 'two-column' }, h('section', {}, h('h3', {}, 'Rincian perhitungan saat ini'), U.object(r.current.breakdown)), h('section', {}, h('h3', {}, 'Rincian perhitungan usulan'), U.object(r.proposed.breakdown))), h('details', {}, h('summary', {}, 'Input karyawan & penugasan'), U.object(employee), U.object(rows('employeeComponents').filter(a => a.employee_id === id)))), [U.button('Edit karyawan', 'edit', { collection: 'employees', index: rows('employees').indexOf(employee) }, 'primary')]);
   }
   const actions = {
     navigate: data => { state.section = data.section; state.filters = {}; render(); document.getElementById('main').focus(); },
@@ -471,7 +475,10 @@
     sample: () => U.confirm('Coba data contoh fiktif?', h('p', {}, dirtyWarning() + 'Data layar akan diganti dengan demo fiktif. Semua nama, gaji, tarif, dan batas hanya ilustrasi; jangan gunakan sebagai aturan hukum.'), () => replace(C.sampleWorkspace(), false, '', true), 'Muat demo fiktif'),
     reset: () => U.confirm('Hapus semua data dari layar?', h('p', {}, dirtyWarning() + 'Seluruh data dalam memori akan dihapus. File CSV yang sudah diunduh tidak dihapus dari komputer.'), () => { replace(null, true); U.toast('Semua data di layar telah dihapus.'); }, 'Hapus data layar'),
     'edit-metadata': () => { if (requireWorkspace()) U.form('Informasi workspace', U.schemas.metadata, ws().metadata, data => { mutate(w => { w.metadata = data; }); U.close(); }); },
-    'edit-rules': () => U.form('Aturan global & estimasi PPh 21', U.schemas.globalRules, ws().globalRules, data => { mutate(w => { w.globalRules = data; }); U.close(); }, U.notice('Pengaturan PPh ini hanya estimasi bulanan. Tarif dan status PTKP diatur per karyawan; validasikan bersama ahli payroll/pajak.')),
+    'edit-rules': () => U.form('Aturan global & estimasi PPh 21', U.schemas.globalRules, ws().globalRules, data => { mutate(w => { w.globalRules = { ...w.globalRules, ...data }; }); U.close(); }, U.notice('Pengaturan PPh ini hanya estimasi bulanan. Tarif dan status PTKP diatur per karyawan; validasikan bersama ahli payroll/pajak.')),
+    'edit-payment-policies': () => U.form('Skema pembayaran · saat ini & usulan', U.schemas.paymentPolicies, ws().globalRules, data => {
+      U.confirm('Terapkan skema pembayaran?', h('div', {}, U.notice('Hasil simulasi akan dihitung ulang. Skema ini berlaku untuk seluruh karyawan pada masing-masing skenario.'), U.object(Object.fromEntries(U.schemas.paymentPolicies.map(s => [s.label, s.options.find(([value]) => value === data[s.key])[1]])))), () => { mutate(w => { Object.assign(w.globalRules, data); }); U.close(); }, 'Terapkan skema');
+    }, U.notice('PPh: gross mengurangi THP; net dibayar perusahaan di luar bruto; gross-up memberi tunjangan pajak di bruto. BPJS: pilih apakah porsi karyawan dipotong dari THP atau ditutup tunjangan perusahaan. Porsi perusahaan tetap terpisah. Belum dikonfirmasi menghalangi perhitungan terkait. Aktifkan estimasi PPh pada aturan global jika diperlukan.')),
     edit: data => editRecord(data.collection, data.index),
     duplicate: data => editRecord(data.collection, data.index, true),
     delete: data => deleteRecord(data.collection, data.index),
@@ -482,7 +489,7 @@
       const employees = filteredEmployees();
       if (!employees.length) { U.toast('Tidak ada karyawan dalam hasil filter.'); return; }
       const ids = new Set(employees.map(e => e.employee_id));
-      confirmMutation('Samakan golongan usulan?', employees.length + ' karyawan pada hasil filter akan memakai golongan saat ini sebagai golongan usulan. Override gaji usulan tetap dipertahankan.', w => w.employees.forEach(e => { if (ids.has(e.employee_id)) e.proposed_golongan = e.current_golongan; }));
+      confirmMutation('Samakan golongan usulan?', employees.length + ' karyawan pada hasil filter akan memakai golongan saat ini sebagai golongan usulan. Gaji pokok usulan mengikuti matriks; override gaji pokok lama diabaikan.', w => w.employees.forEach(e => { if (ids.has(e.employee_id)) e.proposed_golongan = e.current_golongan; }));
     },
     import: data => importFile(data.kind),
     'export-workspace': () => { if (!requireWorkspace()) return; download(C.csv.exportWorkspace(ws()), 'caroll-workspace.csv'); state.dirty = false; render(); U.toast('Unduhan workspace dimulai. Pastikan file CSV berhasil tersimpan di folder unduhan.'); },

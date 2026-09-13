@@ -163,6 +163,22 @@ test('employee and matrix previews apply global and tax rounding without an inte
   assert.deepEqual(ws, before);
 });
 
+test('legacy salary overrides survive CSV round-trip but cannot replace matrix salaries', () => {
+  const ws = sample();
+  const preview = csv.previewEmployees('employee_id,current_basic_override,proposed_basic_override\nDEMO-001,0,9999999', ws, 'update');
+  assert.equal(preview.rejected, 0);
+  const restored = csv.importWorkspace(csv.exportWorkspace(preview.workspace));
+  const employee = restored.employees[0];
+  assert.equal(employee.current_basic_override, 0);
+  assert.equal(employee.proposed_basic_override, 9999999);
+  assert.equal(C.resolveBasic(restored, employee, 'current'), 4000000);
+  assert.equal(C.resolveBasic(restored, employee, 'proposed'), 4200000);
+  assert.equal(C.calculatePayroll(restored).employees[0].proposed.breakdown[0].source, 'matrix');
+  assert.ok(preview.issues.some(i => /override is disabled and ignored/.test(i.message)));
+  restored.matrixEntries = [];
+  assert.equal(C.calculatePayroll(restored).totals, null);
+});
+
 test('employee update matches ID only, preserves omitted fields and blanks explicitly clear overrides', () => {
   const ws = sample();
   ws.employees[0].current_basic_override = 5000000;

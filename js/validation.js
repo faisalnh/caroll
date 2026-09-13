@@ -53,6 +53,7 @@
     if (rules.percentage_precision !== 2) error('Percentage precision must be 2');
     for (const key of ['include_inactive', 'allow_negative_thp', 'proposed_defaults_current', 'tax_enabled']) boolean(rules[key], key);
     choice(rules.tax_basis, ['taxable', 'gross', 'basic'], 'tax basis');
+    for (const [key, options] of Object.entries(C.paymentPolicies)) if (!blank(rules[key])) choice(rules[key], options, key);
     if (!rules.tax_enabled) warning('Estimasi PPh 21 is disabled; results exclude tax');
     unique(ws.employees, employee => employee.employee_id, 'employee ID', true);
     unique(ws.matrices, matrix => matrix.matrix_id, 'matrix ID');
@@ -112,6 +113,15 @@
       choice(employee.pph_method, ['gross', 'net', 'gross_up'], 'PPh method', employee);
       numeric(employee.pph_rate, 'PPh rate', employee, !rules.tax_enabled || !blank(employee.pph_fixed_override), true);
       numeric(employee.pph_fixed_override, 'PPh fixed override', employee, true, true, true);
+      for (const scenario of ['current', 'proposed']) {
+        const policy = C.paymentPolicy(rules, scenario, 'pph');
+        if (rules.tax_enabled && policy === 'unconfirmed') error('Pilih skema PPh ' + scenario + ' pada aturan perhitungan.', employee);
+        if (rules.tax_enabled && policy !== 'unconfirmed' && employee.pph_method !== policy) warning('Metode PPh karyawan lama diabaikan; mengikuti skema ' + scenario + ': ' + policy + '.', employee);
+        if (rules.tax_enabled && policy === 'gross_up' && blank(employee.pph_fixed_override) && Number(employee.pph_rate) >= 1) error('Tarif PPh gross-up harus >= 0% dan < 100%.', employee);
+        for (const kind of ['bpjs_kesehatan', 'bpjs_ketenagakerjaan']) {
+          if (C.paymentPolicy(rules, scenario, kind) === 'unconfirmed' && employee[kind] && ws.bpjsRules.some(r => r.active && r.employee_enabled && (/kesehatan/i.test(r.code) ? 'bpjs_kesehatan' : 'bpjs_ketenagakerjaan') === kind)) error('Pilih skema ' + kind + ' ' + scenario + ' pada aturan perhitungan.', employee);
+        }
+      }
       const resolved = {};
       for (const scenario of ['current', 'proposed']) {
         const code = employee[scenario + '_golongan'] || (scenario === 'proposed' && rules.proposed_defaults_current ? employee.current_golongan : '');
@@ -120,8 +130,7 @@
         numeric(override, scenario + ' basic salary override', employee, true, true, true);
         resolved[scenario] = C.resolveBasic(ws, employee, scenario);
         if (resolved[scenario] === null) error('Unresolved ' + scenario + ' basic salary', employee);
-        const entry = ws.matrixEntries.find(row => row.scenario === scenario && row.golongan === code);
-        if (!blank(override) && entry && Number(override) !== Number(entry.basic_salary)) warning(scenario + ' override differs from matrix salary', employee);
+        if (!blank(override)) warning(scenario + ' basic salary override is disabled and ignored; salary follows matrix', employee);
       }
       if (resolved.current !== null && resolved.proposed !== null && resolved.proposed < resolved.current) warning('Proposed basic salary is lower than current', employee);
       const current = C.parseGolongan(employee.current_golongan);

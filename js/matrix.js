@@ -34,6 +34,11 @@
     const [a, b] = decimal(amount), [c, d] = decimal(decimalRate);
     return rounded(a * c, b * d, rounding);
   };
+  C.grossUpTax = function (amount, decimalRate, rounding = 1) {
+    const [a, b] = decimal(amount), [c, d] = decimal(decimalRate);
+    if (c < 0n || c >= d) throw new RangeError('Tarif PPh gross-up harus >= 0% dan < 100%.');
+    return rounded(a * c, b * (d - c), rounding);
+  };
   C.golongan = function (group, category, level) {
     const code = String(group).trim() + '-' + String(category).trim().toUpperCase() + String(level).trim();
     const parsed = C.parseGolongan(code);
@@ -46,10 +51,10 @@
   };
   C.resolveBasic = function (ws, employee, scenario) {
     if (!['current', 'proposed'].includes(scenario)) return null;
-    const override = employee[scenario + '_basic_override'];
+
     const code = employee[scenario + '_golongan'] || (scenario === 'proposed' && ws.globalRules.proposed_defaults_current ? employee.current_golongan : '');
     const matches = ws.matrixEntries.filter(entry => entry.scenario === scenario && entry.golongan === code);
-    const value = !blank(override) ? override : matches.length === 1 ? matches[0].basic_salary : null;
+    const value = matches.length === 1 ? matches[0].basic_salary : null;
     try { return value === null ? null : C.roundMoney(value, ws.globalRules.rounding); } catch (_) { return null; }
   };
   C.adjustMatrix = function (entries, rate, rounding = 1) {
