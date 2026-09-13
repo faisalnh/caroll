@@ -1,0 +1,3 @@
+﻿employee_id,name,current_golongan,unit,department,position,employment_status,join_date,active,proposed_golongan,current_basic_override,proposed_basic_override,ptkp_status,bpjs_kesehatan,bpjs_ketenagakerjaan,pph_method,pph_rate,pph_fixed_override,notes
+DEMO-001,Demo Employee One,1-U1,Demo Unit,Administration,Demo role,Demo,,true,,,,DEMO,true,true,gross,0.025,,Fictional person; rates are not legal guidance
+DEMO-002,Demo Employee Two,2-PM2,Demo Unit,Teaching,Demo role,Demo,,true,,,,DEMO,true,true,gross,0.025,,Fictional person; rates are not legal guidance

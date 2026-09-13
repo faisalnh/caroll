@@ -1,0 +1,8 @@
+# Private payroll data belongs here, never in source control.
+/private/
+/exports/
+*.csv
+!/samples/*.csv
+.DS_Store
+node_modules/
+coverage/

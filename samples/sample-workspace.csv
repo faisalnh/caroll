@@ -1,0 +1,15 @@
+﻿schema_version,record_type,record_id,name,current_period,proposed_period,matrix_id,scenario,effective_date,salary_group,professional_category,kmk_level,golongan,basic_salary,note,employee_id,current_golongan,unit,department,position,employment_status,join_date,active,proposed_golongan,current_basic_override,proposed_basic_override,ptkp_status,bpjs_kesehatan,bpjs_ketenagakerjaan,pph_method,pph_rate,pph_fixed_override,notes,code,category,direction,calculation_type,default_value,taxable,applies_current,applies_proposed,rounding,component_code,current_value,proposed_value,employee_rate,employer_rate,minimum_basis,maximum_basis,basis,employee_enabled,employer_enabled,currency,percentage_precision,include_inactive,allow_negative_thp,proposed_defaults_current,tax_enabled,tax_basis,tax_rounding
+1,workspace,workspace,Fictional demo — review all rates,2026,2027,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+1,matrix,demo-current,Demo current,,,demo-current,current,2026-01-01,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+1,matrix,demo-proposed,Demo proposed,,,demo-proposed,proposed,2027-01-01,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+1,matrix_entry,"[""current"",""1-U1""]",,,,demo-current,current,,1,U,1,1-U1,4000000,Fictional demonstration,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+1,matrix_entry,"[""current"",""2-PM2""]",,,,demo-current,current,,2,PM,2,2-PM2,6000000,Fictional demonstration,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+1,matrix_entry,"[""proposed"",""1-U1""]",,,,demo-proposed,proposed,,1,U,1,1-U1,4200000,Fictional demonstration,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+1,matrix_entry,"[""proposed"",""2-PM2""]",,,,demo-proposed,proposed,,2,PM,2,2-PM2,6200000,Fictional demonstration,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+1,employee,DEMO-001,Demo Employee One,,,,,,,,,,,,DEMO-001,1-U1,Demo Unit,Administration,Demo role,Demo,,true,,,,DEMO,true,true,gross,0.025,,Fictional person; rates are not legal guidance,,,,,,,,,,,,,,,,,,,,,,,,,,,
+1,employee,DEMO-002,Demo Employee Two,,,,,,,,,,,,DEMO-002,2-PM2,Demo Unit,Teaching,Demo role,Demo,,true,,,,DEMO,true,true,gross,0.025,,Fictional person; rates are not legal guidance,,,,,,,,,,,,,,,,,,,,,,,,,,,
+1,component_definition,DEMO_ALLOWANCE,Demo allowance,,,,,,,,,,,,,,,,,,,true,,,,,true,false,,,,Editable demonstration only,DEMO_ALLOWANCE,allowance,earning,fixed,250000,true,true,true,1,,,,,,,,,,,,,,,,,,
+1,employee_component,"[""DEMO-001"",""DEMO_ALLOWANCE""]",,,,,,,,,,,,,DEMO-001,,,,,,,,,,,,,,,,,,,,,,,,,,,DEMO_ALLOWANCE,,,,,,,,,,,,,,,,,
+1,employee_component,"[""DEMO-002"",""DEMO_ALLOWANCE""]",,,,,,,,,,,,,DEMO-002,,,,,,,,,,,,,,,,,,,,,,,,,,,DEMO_ALLOWANCE,,,,,,,,,,,,,,,,,
+1,bpjs_rule,kesehatan,Demo Kesehatan — NOT legal rates,,,,,,,,,,,,,,,,,,,true,,,,,,,,,,,kesehatan,,,,,,,,1,,,,0.007,0.013,,5000000,selected,true,true,,,,,,,,
+1,global_rule,global_rule,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,1,,,,,,,,,,,IDR,2,false,false,true,false,taxable,1
