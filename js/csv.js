@@ -5,7 +5,7 @@
   const employeeFields = 'employee_id name current_golongan unit department position employment_status join_date active proposed_golongan current_basic_override proposed_basic_override ptkp_status bpjs_kesehatan bpjs_ketenagakerjaan pph_method pph_rate pph_fixed_override notes'.split(' ');
   const fields = {
     workspace: 'name current_period proposed_period'.split(' '),
-    matrix: 'matrix_id name scenario effective_date'.split(' '),
+    matrix: 'matrix_id name scenario effective_date generator_settings'.split(' '),
     matrix_entry: 'matrix_id scenario salary_group professional_category kmk_level golongan basic_salary note'.split(' '),
     employee: employeeFields,
     component_definition: 'code name category direction calculation_type default_value taxable bpjs_kesehatan bpjs_ketenagakerjaan applies_current applies_proposed active rounding notes'.split(' '),
@@ -228,7 +228,7 @@
   }
   function importWorkspace(text) {
     const { headers, records } = table(text);
-    checkHeaders(headers, workspaceHeaders, workspaceHeaders);
+    checkHeaders(headers, workspaceHeaders, workspaceHeaders.filter(h => h !== 'generator_settings'));
     const ws = C.createWorkspace();
     for (const collection of Object.values(collections)) ws[collection] = [];
     ws.schemaVersion = 1;
@@ -345,7 +345,7 @@
           }
           const normalizedMatrix = normalize('matrix', nextMatrix);
           for (const [column, field] of [['matrix_name', 'name'], ['effective_date', 'effective_date']]) if (own(row, column)) metadata.set(`${scenario}/${field}`, row[column]);
-          const matrixChanged = matrix && fields.matrix.some(h => normalizedMatrix[h] !== matrix[h]);
+          const matrixChanged = matrix && fields.matrix.some(h => normalizedMatrix[h] !== (matrix[h] ?? ''));
           if (matrix) result.workspace.matrices[result.workspace.matrices.indexOf(matrix)] = normalizedMatrix;
           else result.workspace.matrices.push(normalizedMatrix);
           if (old) {

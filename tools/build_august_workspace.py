@@ -16,7 +16,7 @@ from openpyxl.utils import column_index_from_string
 
 WORKSPACE_HEADERS = [
     "schema_version", "record_type", "record_id", "name", "current_period",
-    "proposed_period", "matrix_id", "scenario", "effective_date", "salary_group",
+    "proposed_period", "matrix_id", "scenario", "effective_date", "generator_settings", "salary_group",
     "professional_category", "kmk_level", "golongan", "basic_salary", "note",
     "employee_id", "current_golongan", "unit", "department", "position",
     "employment_status", "join_date", "active", "proposed_golongan",
@@ -65,7 +65,7 @@ def money(value: object) -> int:
     return int(Decimal(str(value)).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
 
 
-def matrix_money(value: object, rounding: int) -> int:
+def matrix_money(value: object, rounding: int = 1) -> int:
     amount = Decimal(str(value)) * Decimal("1000")
     step = Decimal(str(rounding))
     return int((amount / step).quantize(Decimal("1"), rounding=ROUND_HALF_UP) * step)
@@ -89,7 +89,7 @@ def empty_row(record_type: str, record_id: str) -> dict[str, object]:
     return row
 
 
-def matrix_lookup(workbook, sheet_name: str, first_data_row: int, rounding: int) -> dict[str, int]:
+def source_matrix_lookup(workbook, sheet_name: str, first_data_row: int) -> dict[str, int]:
     sheet = workbook[sheet_name]
     lookup: dict[str, int] = {}
     for group, start_column in enumerate((3, 9, 15, 21, 27), start=1):
@@ -97,7 +97,43 @@ def matrix_lookup(workbook, sheet_name: str, first_data_row: int, rounding: int)
             for category, offset in (("PM", 0), ("P", 1), ("M", 2), ("U", 3)):
                 value = sheet.cell(first_data_row + kmk - 1, start_column + offset).value
                 if isinstance(value, (int, float, Decimal)):
-                    lookup[f"{group}-{category}{kmk}"] = matrix_money(value, rounding)
+                    lookup[f"{group}-{category}{kmk}"] = matrix_money(value)
+    return lookup
+
+
+def decimal_text(value: Decimal) -> str:
+    text = format(value, "f").rstrip("0").rstrip(".")
+    return text or "0"
+
+
+def matrix_settings(workbook, sheet_name: str, kmk_row: int) -> list[dict[str, object]]:
+    sheet = workbook[sheet_name]
+    settings = []
+    for start_column in (3, 9, 15, 21, 27):
+        base = Decimal(str(sheet.cell(7, start_column).value)) * Decimal("1000")
+        cola = Decimal(str(sheet.cell(6, start_column + 3).value))
+        kmk_index = Decimal(str(sheet.cell(kmk_row, start_column).value))
+        settings.append({
+            "base_salary": int(base) if base == base.to_integral_value() else decimal_text(base),
+            "cola": decimal_text(cola),
+            "kmk_index": decimal_text(kmk_index),
+        })
+    return settings
+
+
+def generated_matrix(settings: list[dict[str, object]], rounding: int = 1) -> dict[str, int]:
+    lookup: dict[str, int] = {}
+    step = Decimal(str(rounding))
+    for group, setting in enumerate(settings, start=1):
+        base = Decimal(str(setting["base_salary"]))
+        cola = Decimal(str(setting["cola"]))
+        kmk_index = Decimal(str(setting["kmk_index"]))
+        for tier, category in enumerate(("PM", "P", "M", "U")):
+            for kmk in range(1, 16):
+                exponent = kmk - 1 + 2 * tier
+                salary = base * (Decimal("1") + cola) * (Decimal("1") + kmk_index) ** exponent
+                rounded = (salary / step).quantize(Decimal("1"), rounding=ROUND_HALF_UP) * step
+                lookup[f"{group}-{category}{kmk}"] = int(rounded)
     return lookup
 
 
@@ -127,9 +163,20 @@ def build(args: argparse.Namespace) -> dict[str, object]:
     payroll_book = load_workbook(args.payroll, read_only=True, data_only=True)
     payroll_sheet = payroll_book["0826 MWS"]
     matrix_book = load_workbook(args.matrix, read_only=True, data_only=True)
-    current_matrix = matrix_lookup(matrix_book, "Matrix MWS 25_26", 12, 1000)
-    proposed_matrix = matrix_lookup(matrix_book, "Draft Matrix MWS 26_27 Penyesua", 13, 1)
-    admin_matrix = matrix_lookup(matrix_book, "KG 3 Admin", 13, 1)
+    current_settings = matrix_settings(matrix_book, "Matrix MWS 25_26", 8)
+    proposed_settings = matrix_settings(matrix_book, "Draft Matrix MWS 26_27 Penyesua", 9)
+    admin_settings = matrix_settings(matrix_book, "KG 3 Admin", 9)
+    current_matrix = generated_matrix(current_settings)
+    proposed_matrix = generated_matrix(proposed_settings)
+    admin_matrix = generated_matrix(admin_settings)
+    source_current_matrix = source_matrix_lookup(matrix_book, "Matrix MWS 25_26", 12)
+    source_proposed_matrix = source_matrix_lookup(matrix_book, "Draft Matrix MWS 26_27 Penyesua", 13)
+    matrix_mismatches = {
+        "current": [code for code, salary in current_matrix.items() if source_current_matrix.get(code) != salary],
+        "proposed": [code for code, salary in proposed_matrix.items() if source_proposed_matrix.get(code) != salary],
+    }
+    if matrix_mismatches["current"] or matrix_mismatches["proposed"]:
+        raise ValueError(f"Generated matrix differs from workbook cells: {matrix_mismatches}")
     calculated = calculated_golongan(args.kmk)
     employer_bpjs = bpjs_employer_lookup(payroll_book)
 
@@ -138,17 +185,18 @@ def build(args: argparse.Namespace) -> dict[str, object]:
     row.update(name="MWS Payroll Agustus 2026 - Simulasi TA 2026/2027", current_period="Agustus 2026", proposed_period="TA 2026/2027")
     rows.append(row)
 
-    for scenario, matrix_id, name, effective_date in (
-        ("current", "mws-2025-2026", "Matrix MWS 2025/2026", "2025-07-01"),
-        ("proposed", "mws-2026-2027", "Draft Matrix MWS 2026/2027 Penyesuaian", "2026-07-01"),
+    for scenario, matrix_id, name, effective_date, settings in (
+        ("current", "mws-2025-2026", "Matrix MWS 2025/2026", "2025-07-01", current_settings),
+        ("proposed", "mws-2026-2027", "Draft Matrix MWS 2026/2027 Penyesuaian", "2026-07-01", proposed_settings),
     ):
         row = empty_row("matrix", matrix_id)
-        row.update(matrix_id=matrix_id, name=name, scenario=scenario, effective_date=effective_date)
+        row.update(matrix_id=matrix_id, name=name, scenario=scenario, effective_date=effective_date,
+                   generator_settings=json.dumps(settings, ensure_ascii=True, separators=(",", ":")))
         rows.append(row)
 
     for scenario, matrix_id, entries, note in (
-        ("current", "mws-2025-2026", current_matrix, "Converted from source matrix units and rounded to the Rp1,000 used by August payroll"),
-        ("proposed", "mws-2026-2027", proposed_matrix, "Converted from source matrix units and rounded to nearest rupiah"),
+        ("current", "mws-2025-2026", current_matrix, "Generated from source Awal, COLA, and Indeks KMK; rounded to nearest rupiah"),
+        ("proposed", "mws-2026-2027", proposed_matrix, "Generated from source Awal, COLA, and Indeks KMK; rounded to nearest rupiah"),
     ):
         for code, salary in sorted(entries.items(), key=lambda item: parse_golongan(item[0])):
             group, category, kmk = parse_golongan(code)
@@ -216,7 +264,7 @@ def build(args: argparse.Namespace) -> dict[str, object]:
         current_matrix_salary = current_matrix.get(current_code)
         current_override: object = "" if current_matrix_salary == current_actual else current_actual
         if current_override != "":
-            override_reason = (override_reason + " " if override_reason else "") + "Current payroll basic differs from rounded current matrix."
+            override_reason = (override_reason + " " if override_reason else "") + "Current payroll basic differs from the generated current matrix."
 
         employee = empty_row("employee", employee_id)
         employee.update(
@@ -327,6 +375,8 @@ def build(args: argparse.Namespace) -> dict[str, object]:
         "employee_count": len(employees),
         "current_matrix_entries": len(current_matrix),
         "proposed_matrix_entries": len(proposed_matrix),
+        "matrix_generator_settings": {"current": current_settings, "proposed": proposed_settings},
+        "matrix_generator_cell_mismatches": matrix_mismatches,
         "calculated_golongan_matches": sum(1 for employee in audit_employees if employee["current_golongan"] != employee["proposed_golongan"]),
         "admin_matrix_overrides": sum(1 for employee in audit_employees if employee["uses_admin_override"]),
         "component_assignments": len(assignments),

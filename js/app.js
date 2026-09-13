@@ -85,6 +85,7 @@
     main.append(filters);
     const matrices = rows('matrices').filter(m => m.scenario === state.scenario);
     main.append(h('details', { class: 'matrix-metadata' }, h('summary', {}, 'Identitas matriks · ' + (state.scenario === 'current' ? 'Saat ini' : 'Usulan') + ' (' + matrices.length + ')'), U.panel('Identitas matriks · ' + (state.scenario === 'current' ? 'Saat ini' : 'Usulan'), matrices.length ? U.table(['ID matriks', 'Nama', 'Tanggal berlaku', 'Tindakan'], matrices.map(m => [m.matrix_id, m.name, m.effective_date || '—', controls('edit', rows('matrices').indexOf(m), 'matrices')])) : h('p', { class: 'muted' }, 'Buat identitas matriks sebelum menambahkan entri.'), U.button('Tambah matriks', 'edit', { collection: 'matrices' }, 'small'))));
+    main.append(matrixGenerator(matrices));
     main.append(U.actions(U.button('Salin saat ini → usulan', 'copy-matrix'), U.button('Penyesuaian persentase', 'adjust-matrix')));
     main.append(h('p', { class: 'muted' }, 'Golongan = kelompok gaji + kategori profesional + KMK. Klik Edit atau nilai pada grid untuk mengubah entri.'));
     const entries = rows('matrixEntries').filter(e => e.scenario === state.scenario);
@@ -231,6 +232,7 @@
         if (!data.calculation_type.startsWith('percentage') && !Number.isSafeInteger(data.default_value)) throw new Error('Nominal komponen harus rupiah bulat yang aman.');
       }
       if (collection === 'bpjsRules' && data.minimum_basis !== '' && data.maximum_basis !== '' && data.minimum_basis > data.maximum_basis) throw new Error('Batas minimum tidak boleh lebih besar dari maksimum.');
+      if (collection === 'matrices' && existing?.generator_settings) data.generator_settings = existing.generator_settings;
       const commit = () => {
         mutate(w => {
           if (target >= 0) w[collection][target] = data; else w[collection].push(data);
@@ -307,6 +309,59 @@
       });
     };
     build(existing?.component_code || rows('componentDefinitions')[0].code);
+  }
+  function matrixGenerator(matrices) {
+    const scenario = state.scenario;
+    const target = h('select', { name: 'generator-matrix', 'aria-label': 'Matriks tujuan' }, matrices.length ? matrices.map(m => h('option', { value: m.matrix_id }, m.name)) : h('option', { value: '' }, 'Buat matriks otomatis'));
+    const schema = Array.from({ length: 5 }, (_, i) => [
+      { key: 'base_' + i, label: 'KG ' + (i + 1) + ' · Gaji awal (Rp)', type: 'number', min: 1, step: 'any' },
+      { key: 'cola_' + i, label: 'KG ' + (i + 1) + ' · COLA (%)', type: 'rate', min: 0 },
+      { key: 'kmk_' + i, label: 'KG ' + (i + 1) + ' · Indeks KMK (%)', type: 'rate', min: 0 }
+    ]).flat();
+    const fields = h('div');
+    const load = () => {
+      let settings = [];
+      try { settings = JSON.parse(matrices.find(m => m.matrix_id === target.value)?.generator_settings || '[]'); } catch (_) { /* Imported metadata may not contain generator settings. */ }
+      if (!Array.isArray(settings)) settings = [];
+      fields.replaceChildren(U.table(['Kelompok gaji', 'Gaji awal · sebelum COLA', 'COLA', 'Indeks KMK'], Array.from({ length: 5 }, (_, i) => [
+        h('strong', {}, 'KG ' + (i + 1)), ...schema.slice(i * 3, i * 3 + 3).map((spec, j) => U.field(spec, settings[i]?.[['base_salary', 'cola', 'kmk_index'][j]] ?? (j ? '0' : '')))
+      ])));
+    };
+    target.addEventListener('change', load); load();
+    const error = h('div', { role: 'alert' });
+    const form = h('form', {}, h('label', { class: 'field' }, 'Matriks tujuan · ' + (scenario === 'current' ? 'Saat ini' : 'Usulan'), target), fields,
+      h('p', { class: 'muted' }, 'PM1 = gaji awal × (1 + COLA). KMK berikutnya × (1 + indeks KMK). P1 = PM3, M1 = P3, U1 = M3. Masukkan rupiah penuh, bukan ribuan. Pembulatan akhir: Rp ' + ws().globalRules.rounding + '.'),
+      error, h('button', { type: 'submit', class: 'primary' }, 'Pratinjau 300 gaji · KG 1–5'));
+    form.addEventListener('submit', event => {
+      event.preventDefault();
+      try {
+        const data = U.readForm(form, schema);
+        const settings = Array.from({ length: 5 }, (_, i) => ({ base_salary: data['base_' + i], cola: data['cola_' + i], kmk_index: data['kmk_' + i] }));
+        let matrixId = target.value;
+        if (!matrixId) {
+          matrixId = 'matrix-' + scenario;
+          while (rows('matrices').some(m => m.matrix_id === matrixId)) matrixId += '-2';
+        }
+        const generated = C.generateMatrix(settings, scenario, matrixId, ws().globalRules.rounding);
+        const codes = new Set(generated.map(e => e.golongan));
+        const existing = rows('matrixEntries').filter(e => e.scenario === scenario && codes.has(e.golongan));
+        const preview = U.table(['Golongan', 'Sebelum', 'Sesudah'], generated.map(e => {
+          const matches = existing.filter(old => old.golongan === e.golongan);
+          return [e.golongan, matches.length ? matches.map(old => U.amount(old.basic_salary)) : '—', U.amount(e.basic_salary)];
+        }));
+        U.confirm('Pratinjau matriks otomatis · ' + (scenario === 'current' ? 'Saat ini' : 'Usulan'), h('div', {}, U.notice(dirtyWarning() + existing.length + ' entri yang cocok pada skenario ini akan diganti, termasuk edit manual dan entri dari identitas matriks lain. Golongan di luar KG 1–5 / PM,P,M,U / KMK 1–15 tetap dipertahankan. Override karyawan tidak berubah. Belum ada perubahan sampai diterapkan.'), preview), () => {
+          mutate(w => {
+            let matrix = w.matrices.find(m => m.matrix_id === matrixId);
+            if (!matrix) { matrix = { matrix_id: matrixId, scenario, name: 'Matriks otomatis · ' + (scenario === 'current' ? 'Saat ini' : 'Usulan'), effective_date: '' }; w.matrices.push(matrix); }
+            matrix.generator_settings = JSON.stringify(settings);
+            w.matrixEntries = w.matrixEntries.filter(e => !(e.scenario === scenario && codes.has(e.golongan))).concat(generated.map(e => ({ ...e, note: existing.find(old => old.golongan === e.golongan)?.note || '' })));
+            state.matrixView = 'grid';
+          });
+          U.close(); U.toast('300 gaji diterapkan. Ekspor workspace untuk menyimpan parameter dan hasil.');
+        }, 'Terapkan 300 gaji');
+      } catch (e) { error.className = 'form-error'; error.textContent = e.message; }
+    });
+    return U.panel('Matriks otomatis · cukup 3 input per KG', form);
   }
   function copyMatrix() {
     const current = rows('matrixEntries').filter(e => e.scenario === 'current');

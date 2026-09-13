@@ -59,6 +59,23 @@
       return { ...entry, basic_salary: rounded(a * (d + n), b * d, rounding) };
     });
   };
+  C.generateMatrix = function (settings, scenario, matrixId, rounding = 1) {
+    if (!['current', 'proposed'].includes(scenario) || !matrixId) throw new Error('Skenario dan identitas matriks wajib diisi.');
+    if (!Array.isArray(settings) || settings.length !== 5) throw new Error('Isi parameter KG 1–5.');
+    return settings.flatMap((setting, index) => {
+      const [base, baseD] = decimal(setting.base_salary);
+      const [cola, colaD] = decimal(setting.cola);
+      const [kmk, kmkD] = decimal(setting.kmk_index);
+      if (base <= 0n || cola < 0n || kmk < 0n) throw new Error('Gaji awal harus positif; COLA dan indeks KMK tidak boleh negatif.');
+      // Keep intermediate values exact, like spreadsheet formulas; round only the final salary.
+      const salaries = Array.from({ length: 21 }, (_, step) => rounded(base * (colaD + cola) * (kmkD + kmk) ** BigInt(step), baseD * colaD * kmkD ** BigInt(step), rounding));
+      return ['PM', 'P', 'M', 'U'].flatMap((category, tier) => Array.from({ length: 15 }, (_, level) => ({
+        matrix_id: matrixId, scenario, salary_group: String(index + 1), professional_category: category,
+        kmk_level: level + 1, golongan: C.golongan(index + 1, category, level + 1),
+        basic_salary: salaries[level + tier * 2], note: ''
+      })));
+    });
+  };
   C.change = function (current, proposed) {
     const amount = proposed - current;
     return { amount, percent: current === 0 ? (proposed === 0 ? 0 : null) : amount / current * 100 };

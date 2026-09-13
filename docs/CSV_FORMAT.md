@@ -14,7 +14,7 @@ Golongan is canonicalized through core parsing as `{salary_group}-{professional_
 
 ## Workspace CSV
 
-`exportWorkspace(workspace)` emits the complete fixed superset, never JSON payload cells. `importWorkspace(text)` returns a new structurally valid workspace or throws; success does **not** mean payroll is ready to calculate. Every superset header is required on import (column order may vary). Row order is immaterial. Unknown schema versions, record types, duplicate IDs/keys, irrelevant nonblank cells, missing singleton records, invalid types/enums/numbers/rules, and dangling matrix/employee/component references are rejected. Structurally valid unfinished drafts can be both saved and reloaded: missing salary rows for employee Golongan, unresolved proposed salaries, and missing manual component or enabled-tax inputs do not block workspace loading. After import, the UI should show `C.validate(workspace)` issues as informational readiness feedback, **not gate workspace loading on them**. Core calculation and result export remain blocked until payroll errors are resolved. Employee/matrix import previews retain their separate blocking contract below.
+`exportWorkspace(workspace)` emits the complete fixed superset, not whole-record JSON payloads; optional `matrix.generator_settings` is an opaque JSON text cell. `importWorkspace(text)` returns a new structurally valid workspace or throws; success does **not** mean payroll is ready to calculate. Every superset header except optional `generator_settings` is required on import (column order may vary). Schema remains `1`; the current application accepts older workspace CSVs without this column unchanged, treating omitted settings as blank. Older application versions may reject new workspace exports containing the `generator_settings` column. Row order is immaterial. Unknown schema versions, record types, duplicate IDs/keys, irrelevant nonblank cells, missing singleton records, invalid types/enums/numbers/rules, and dangling matrix/employee/component references are rejected. Structurally valid unfinished drafts can be both saved and reloaded: missing salary rows for employee Golongan, unresolved proposed salaries, and missing manual component or enabled-tax inputs do not block workspace loading. After import, the UI should show `C.validate(workspace)` issues as informational readiness feedback, **not gate workspace loading on them**. Core calculation and result export remain blocked until payroll errors are resolved. Employee/matrix import previews retain their separate blocking contract below.
 
 The header is constructed deterministically: the three leading columns below, followed by the first occurrence of each field in the record groups below, in the displayed order. Shared field names occupy **one** column. This defines the complete stable header, including when collections are empty. Fields not applicable to a row's `record_type` must be blank.
 
@@ -39,12 +39,15 @@ Fields in order: `name`, `current_period`, `proposed_period`.
 
 #### `matrix` → `matrices`
 
-Fields: `matrix_id!`, `name!`, `scenario!`, `effective_date`.
+Fields: `matrix_id!`, `name!`, `scenario!`, `effective_date`, `generator_settings`.
 
 - `matrix_id`: unique matrix identifier referenced by entries.
 - `name`: matrix display name.
 - `scenario`: `current` or `proposed`; at most one matrix per scenario.
 - `effective_date`: optional ISO date.
+- `generator_settings`: optional opaque JSON **text**, preserved by workspace CSV without parsing or validating its internal structure. Normal CSV quoting applies (double embedded quotes). The frontend writes an array ordered KG 1–5, each with `base_salary` (positive full rupiah, decimals allowed), `cola` and `kmk_index` (nonnegative fractional rates; the UI accepts percentages). Blank means no saved parameters. This is matrix metadata, not a `matrix_entry` column.
+
+The inline generator creates 300 salary entries for the selected scenario: KG 1–5 × PM/P/M/U × KMK 1–15. Each uses exact compounded arithmetic, `base_salary * (1 + cola) * (1 + kmk_index)^(kmkLevel - 1 + 2 * tierIndex)`, with `tierIndex` = 0/1/2/3 for PM/P/M/U and `kmkLevel` = 1–15; only the final salary is rounded using `globalRules.rounding`. PM1 is base after COLA; P1 = PM3, M1 = P3, U1 = M3. Applying the confirmed before/after preview creates a matrix if needed and replaces matching `(scenario,golongan)` entries even under other matrix identities, preserving matching notes, out-of-range entries and employee overrides. Other scenarios are untouched. Manual salary edits do not recalculate saved parameters; regeneration overwrites matching cells. See [the user guide](USER_GUIDE.md#matriks-otomatis).
 
 #### `matrix_entry` → `matrixEntries`
 
@@ -161,13 +164,15 @@ employee_id,proposed_golongan,proposed_basic_override
 
 ## Matrix-only CSV
 
-`exportMatrix(ws, scenario)` exports the selected scenario. Headers, in order:
+`exportMatrix(ws, scenario)` exports the selected scenario's salary entries, not generator parameters. Use workspace export to retain `generator_settings`; it is not a supported matrix-only column. Headers, in order:
 
 `scenario,golongan,basic_salary,matrix_name,effective_date,salary_group,professional_category,kmk_level,note`
 
 `previewMatrix(text, ws)` requires the first three headers. Their meanings match `matrix_entry`; `matrix_name` maps to the parent matrix's `name`, and `effective_date` to its date. Dimensions, if omitted or blank, derive from Golongan. Omitted note and metadata retain existing values. Provided blank note/date clears it; blank matrix name is invalid. All provided metadata for a scenario must agree across rows. New scenarios create `matrix-current` or `matrix-proposed` with default names `Current matrix` / `Proposed matrix` and a blank date unless provided.
 
 This API **upserts** by `(scenario,golongan)` and retains entries absent from the file; it is not matrix replacement. Duplicate keys in one file, inconsistent dimensions, and conflicting scenario metadata are rejected. Parent metadata changes count a matching row as updated. Preview shape and blocking behavior match employee imports.
+
+The following salaries are illustrative, not taken from a real workbook. Do not commit real workbook salaries or payroll data.
 
 ```csv
 scenario,golongan,basic_salary,matrix_name,effective_date,note
