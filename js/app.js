@@ -4,11 +4,20 @@
   const U = C.ui;
   const h = U.el;
   const sections = { workspace: ['Workspace', 'Kelola file dan mulai perencanaan payroll Anda.'], matrix: ['Matriks gaji', 'Susun gaji pokok berdasarkan golongan, kelompok, dan masa kerja.'], employees: ['Karyawan', 'Kelola data karyawan dan bandingkan penempatan golongan.'], components: ['Komponen payroll', 'Atur pendapatan, potongan, dan kontribusi pemberi kerja.'], rules: ['Aturan perhitungan', 'Tinjau parameter BPJS, estimasi PPh 21, dan aturan global.'], simulation: ['Simulasi payroll', 'Lihat dampak usulan terhadap karyawan dan biaya organisasi.'] };
-  const state = { workspace: null, dirty: false, section: 'workspace', filename: '', demo: false, scenario: 'current', matrixView: 'grid', filters: {}, result: null, issues: [] };
+  const state = { workspace: null, dirty: false, section: 'workspace', filename: '', demo: false, scenario: 'current', matrixType: '', matrixId: '', matrixView: 'grid', filters: {}, result: null, issues: [] };
   const clone = value => JSON.parse(JSON.stringify(value));
   const ws = () => state.workspace;
   const unique = values => [...new Set(values.filter(v => v !== undefined && v !== null && v !== ''))].sort((a, b) => String(a).localeCompare(String(b), 'id', { numeric: true }));
   const rows = name => ws()?.[name] || [];
+  const knownTypes = () => unique(rows('matrices').map(m => C.normalizeMatrixType(m.matrix_type)).filter(Boolean));
+  const typeEntries = (employee, scenario) => {
+    const type = C.resolveMatrixType(ws(), employee, scenario);
+    const parents = rows('matrices').filter(m => m.scenario === scenario && type && C.normalizeMatrixType(m.matrix_type) === type);
+    return parents.length === 1 ? rows('matrixEntries').filter(e => e.matrix_id === parents[0].matrix_id && e.scenario === scenario) : [];
+  };
+  const selectedMatrices = () => rows('matrices').filter(m => m.scenario === state.scenario && (C.normalizeMatrixType(m.matrix_type) || '__legacy') === state.matrixType);
+  const selectedEntries = () => rows('matrixEntries').filter(e => e.scenario === state.scenario && e.matrix_id === state.matrixId);
+  const hasBasicOverride = (e, scenario) => e[scenario + '_basic_override'] !== '' && e[scenario + '_basic_override'] != null;
   const dirtyWarning = () => state.dirty ? 'Ada perubahan belum disimpan. Ekspor workspace terlebih dahulu jika ingin menyimpannya. ' : '';
   const getIssues = () => ws() ? C.validate(ws()) : [];
   function mutate(change) {
@@ -26,6 +35,7 @@
     state.demo = demo;
     state.result = null;
     state.filters = {};
+    state.matrixType = ''; state.matrixId = ''; state.scenario = 'current';
     state.section = 'workspace';
     U.close();
     render();
@@ -79,40 +89,70 @@
     main.append(U.panel('Pemeriksaan workspace', state.issues.length ? U.issues(state.issues) : h('p', { class: 'muted' }, 'Tidak ada masalah validasi yang terdeteksi.')));
   }
   function renderMatrix(main) {
+    const types = unique(rows('matrices').filter(m => m.scenario === state.scenario).map(m => C.normalizeMatrixType(m.matrix_type)));
+    if (!state.matrixType) state.matrixType = types[0] || (rows('matrices').some(m => m.scenario === state.scenario) ? '__legacy' : '');
+    const matrices = selectedMatrices();
+    if (!matrices.some(m => m.matrix_id === state.matrixId)) state.matrixId = matrices[0]?.matrix_id || '';
     main.append(U.heading(...sections.matrix, U.button('Impor CSV', 'import', { kind: 'matrix' }), U.button('Ekspor matriks', 'export-matrix'), U.button('Tambah entri', 'edit', { collection: 'matrixEntries' }, 'primary')));
-    const filters = h('div', { class: 'filters' }, U.filter('scenario', 'Skenario', [['current', 'Saat ini'], ['proposed', 'Usulan']], state.scenario), U.filter('matrixView', 'Tampilan', [['grid', 'Grid kelompok gaji'], ['list', 'Daftar golongan']], state.matrixView));
+    const filters = h('div', { class: 'filters' }, U.filter('scenario', 'Skenario', [['current', 'Saat ini'], ['proposed', 'Usulan']], state.scenario), U.filter('matrixType', 'Jenis matriks', [...unique([...knownTypes(), state.matrixType]).filter(t => t !== '__legacy').map(t => [t, t]), ...rows('matrices').some(m => !C.normalizeMatrixType(m.matrix_type)) ? [['__legacy', 'Jenis belum ditetapkan / tidak valid (legacy)']] : []], state.matrixType), U.filter('matrixId', 'Identitas matriks', matrices.map(m => [m.matrix_id, m.matrix_id + ' · ' + m.name]), state.matrixId), U.filter('matrixView', 'Tampilan', [['grid', 'Grid kelompok gaji'], ['list', 'Daftar golongan']], state.matrixView));
     filters.querySelectorAll('option[value=""]').forEach(o => o.remove());
     main.append(filters);
-    const matrices = rows('matrices').filter(m => m.scenario === state.scenario);
-    main.append(h('details', { class: 'matrix-metadata' }, h('summary', {}, 'Identitas matriks · ' + (state.scenario === 'current' ? 'Saat ini' : 'Usulan') + ' (' + matrices.length + ')'), U.panel('Identitas matriks · ' + (state.scenario === 'current' ? 'Saat ini' : 'Usulan'), matrices.length ? U.table(['ID matriks', 'Nama', 'Tanggal berlaku', 'Tindakan'], matrices.map(m => [m.matrix_id, m.name, m.effective_date || '—', controls('edit', rows('matrices').indexOf(m), 'matrices')])) : h('p', { class: 'muted' }, 'Buat identitas matriks sebelum menambahkan entri.'), U.button('Tambah matriks', 'edit', { collection: 'matrices' }, 'small'))));
-    main.append(matrixGenerator(matrices));
-    main.append(U.actions(U.button('Salin saat ini → usulan', 'copy-matrix'), U.button('Penyesuaian persentase', 'adjust-matrix')));
+
+    const metadata = rows('matrices').filter(m => m.scenario === state.scenario);
+    main.append(h('details', { class: 'matrix-metadata' }, h('summary', {}, 'Identitas matriks · ' + (state.scenario === 'current' ? 'Saat ini' : 'Usulan') + ' (' + matrices.length + ')'), U.panel('Identitas matriks · ' + (state.scenario === 'current' ? 'Saat ini' : 'Usulan'), metadata.length ? U.table(['ID matriks', 'Jenis', 'Nama', 'Tanggal berlaku', 'Tindakan'], metadata.map(m => [m.matrix_id, m.matrix_type || 'Belum ditetapkan (legacy)', m.name, m.effective_date || '—', controls('edit', rows('matrices').indexOf(m), 'matrices')])) : h('p', { class: 'muted' }, 'Buat identitas matriks sebelum menambahkan entri.'), U.button('Tambah matriks', 'edit', { collection: 'matrices' }, 'small'))));
+    main.append(matrixGenerator(matrices.filter(m => m.matrix_id === state.matrixId)));
+    main.append(U.actions(U.button('Salin matriks terpilih → skenario lain', 'copy-matrix'), U.button('Penyesuaian persentase', 'adjust-matrix')));
     main.append(h('p', { class: 'muted' }, 'Golongan = kelompok gaji + kategori profesional + KMK. Klik Edit atau nilai pada grid untuk mengubah entri.'));
-    const entries = rows('matrixEntries').filter(e => e.scenario === state.scenario);
+    const entries = selectedEntries();
     if (state.matrixView === 'grid') {
-      main.append(U.matrixGrid(rows('matrixEntries'), state.scenario, rows('matrices'), ws().metadata[state.scenario + '_period']));
+      main.append(U.matrixGrid(rows('matrixEntries'), state.scenario, rows('matrices'), ws().metadata[state.scenario + '_period'], state.matrixId));
     } else main.append(U.table(['Golongan', 'Kelompok', 'Kategori', 'KMK', 'Gaji pokok', 'Matriks', 'Catatan', 'Tindakan'], entries.map(e => [h('strong', {}, e.golongan), e.salary_group, e.professional_category, e.kmk_level, U.amount(e.basic_salary), e.matrix_id, h('span', { title: e.note || '' }, e.note || '—'), controls('edit', rows('matrixEntries').indexOf(e), 'matrixEntries', true)])));
   }
   function employeeIssues(e) { return state.issues.filter(i => i.employee_id === e.employee_id); }
-  const isOverride = e => ['pph_fixed_override'].some(k => e[k] !== '' && e[k] !== undefined && e[k] !== null);
+
   function filteredEmployees() {
     const f = state.filters;
-    return rows('employees').filter(e => (!f.search || (e.employee_id + ' ' + e.name).toLocaleLowerCase('id').includes(f.search.toLocaleLowerCase('id'))) && (!f.unit || e.unit === f.unit) && (!f.department || e.department === f.department) && (!f.golongan || e.current_golongan === f.golongan || e.proposed_golongan === f.golongan) && (!f.active || String(Boolean(e.active)) === f.active) && (!f.validation || (f.validation === 'clean' ? !employeeIssues(e).length : employeeIssues(e).some(i => i.severity === f.validation))));
+    return rows('employees').filter(e => ['current', 'proposed'].every(s => !f[s + '_matrix_type'] || (C.resolveMatrixType(ws(), e, s) || '__missing') === f[s + '_matrix_type']) && (!f.search || (e.employee_id + ' ' + e.name).toLocaleLowerCase('id').includes(f.search.toLocaleLowerCase('id'))) && (!f.unit || e.unit === f.unit) && (!f.department || e.department === f.department) && (!f.golongan || e.current_golongan === f.golongan || e.proposed_golongan === f.golongan) && (!f.active || String(Boolean(e.active)) === f.active) && (!f.validation || (f.validation === 'clean' ? !employeeIssues(e).length : employeeIssues(e).some(i => i.severity === f.validation))));
   }
   function employeeFilters(simulation = false) {
     const f = state.filters;
-    return h('div', { class: 'filters' }, U.search(f.search), U.filter('unit', 'Semua unit', unique(rows('employees').map(e => e.unit)), f.unit), U.filter('department', 'Semua departemen', unique(rows('employees').map(e => e.department)), f.department), simulation ? U.filter('change', 'Semua hasil', [['increased', 'THP naik'], ['unchanged', 'THP tetap'], ['decreased', 'THP turun'], ['golongan', 'Golongan berubah'], ['missing', 'Data bermasalah'], ['override', 'Override manual']], f.change) : [U.filter('golongan', 'Semua golongan', unique(rows('employees').flatMap(e => [e.current_golongan, e.proposed_golongan])), f.golongan), U.filter('active', 'Semua status aktif', [['true', 'Aktif'], ['false', 'Nonaktif']], f.active), U.filter('validation', 'Semua validasi', [['error', 'Kesalahan'], ['warning', 'Peringatan'], ['clean', 'Tanpa masalah']], f.validation)], U.button('Bersihkan filter', 'clear-filters', {}, 'small'));
+    return h('div', { class: 'filters' }, U.search(f.search), ...['current', 'proposed'].map(s => U.filter(s + '_matrix_type', 'Semua jenis ' + s, [...unique(rows('employees').map(e => C.resolveMatrixType(ws(), e, s))).map(t => [t, t]), ['__missing', 'Jenis belum terpetakan']], f[s + '_matrix_type'])), U.filter('unit', 'Semua unit', unique(rows('employees').map(e => e.unit)), f.unit), U.filter('department', 'Semua departemen', unique(rows('employees').map(e => e.department)), f.department), simulation ? U.filter('change', 'Semua hasil', [['increased', 'THP naik'], ['unchanged', 'THP tetap'], ['decreased', 'THP turun'], ['golongan', 'Golongan berubah'], ['missing', 'Data bermasalah']], f.change) : [U.filter('golongan', 'Semua golongan', unique(rows('employees').flatMap(e => [e.current_golongan, e.proposed_golongan])), f.golongan), U.filter('active', 'Semua status aktif', [['true', 'Aktif'], ['false', 'Nonaktif']], f.active), U.filter('validation', 'Semua validasi', [['error', 'Kesalahan'], ['warning', 'Peringatan'], ['clean', 'Tanpa masalah']], f.validation)], U.button('Bersihkan filter', 'clear-filters', {}, 'small'));
+  }
+  function validationCount(issues, data) {
+    if (!issues.length) return U.badge('0 masalah', '');
+    const errors = issues.filter(i => i.severity === 'error').length;
+    const label = issues.length + ' masalah · ' + errors + ' kesalahan · ' + (issues.length - errors) + ' peringatan';
+    return h('button', { type: 'button', class: 'small ' + (errors ? 'danger' : ''), 'data-action': 'employee-validation', ...Object.fromEntries(Object.entries(data).map(([k, v]) => ['data-' + k, v])), 'aria-label': 'Lihat ' + label, title: label }, label);
+  }
+  function showEmployeeValidation(data) {
+    const employee = data.index === undefined ? null : rows('employees')[Number(data.index)];
+    const issues = employee ? employeeIssues(employee) : state.issues;
+    const repair = issue => {
+      const matches = rows('employees').filter(e => e.employee_id === issue.employee_id);
+      const target = employee || (matches.length === 1 ? matches[0] : null);
+      const buttons = [];
+      if (target) buttons.push(U.button('Edit karyawan', 'edit', { collection: 'employees', index: rows('employees').indexOf(target) }, 'small'));
+      const message = issue.message || '';
+      if (/skema|policy/i.test(message)) buttons.push(U.button('Atur skema pembayaran', 'edit-payment-policies', {}, 'small'));
+      if (/matrix|matriks|golongan|basic salary/i.test(message)) buttons.push(U.button('Buka matriks', 'repair-section', { section: 'matrix' }, 'small'));
+      if (/component|komponen|contribution|kontribusi|take-home/i.test(message)) buttons.push(U.button('Buka komponen', 'repair-section', { section: 'components' }, 'small'));
+      if (/BPJS|tax|pajak|PPh|rounding|currency|rezim/i.test(message) || !target) buttons.push(U.button('Buka aturan perhitungan', 'repair-section', { section: 'rules' }, 'small'));
+      return U.actions(buttons);
+    };
+    U.dialog('Validasi · ' + (employee ? employee.employee_id + ' · ' + employee.name : 'Seluruh workspace'), h('div', {},
+      h('p', {}, issues.length + ' masalah. Gunakan tautan perbaikan pada setiap pesan. Setelah disimpan, jumlah validasi diperbarui otomatis.'),
+      issues.length ? U.table(['Masalah', 'Perbaiki'], issues.map(issue => [U.issues([issue]), repair(issue)])) : h('p', {}, 'Tidak ada masalah.')));
   }
   function renderEmployees(main) {
     main.append(U.heading(...sections.employees, U.button('Impor CSV', 'import', { kind: 'employees' }), U.button('Ekspor CSV', 'export-employees'), U.button('Tambah karyawan', 'edit', { collection: 'employees' }, 'primary')), employeeFilters());
     const employees = filteredEmployees();
-    main.append(h('div', { class: 'panel-head' }, h('span', { class: 'muted' }, employees.length + ' dari ' + rows('employees').length + ' karyawan'), U.button('Samakan golongan usulan (hasil filter)', 'equal-golongan', {}, 'small')));
-    main.append(U.table(['ID / Nama', 'Unit / Departemen', 'Jabatan', 'Status', 'Golongan saat ini', 'Golongan usulan', 'Pokok saat ini', 'Pokok usulan', 'Validasi', 'Tindakan'], employees.map(e => [h('div', {}, h('strong', {}, e.name), h('div', { class: 'muted' }, e.employee_id)), h('div', {}, e.unit || '—', h('div', { class: 'muted' }, e.department || '—')), e.position || '—', U.badge(e.active ? 'Aktif' : 'Nonaktif'), e.current_golongan || '—', e.proposed_golongan || (ws().globalRules.proposed_defaults_current ? e.current_golongan + ' (default)' : '—'), basicCell(e, 'current'), basicCell(e, 'proposed'), U.actions(employeeIssues(e).map(i => U.badge(i.severity === 'error' ? 'Kesalahan' : 'Peringatan', i.severity)), isOverride(e) ? U.badge('Manual', 'override') : null), controls('edit', rows('employees').indexOf(e), 'employees', true)])));
-    if (state.issues.length) main.append(U.panel('Catatan validasi', U.issues(state.issues)));
+    main.append(h('div', { class: 'panel-head' }, h('span', { class: 'muted' }, employees.length + ' dari ' + rows('employees').length + ' karyawan'), U.actions(U.button('Tetapkan jenis matriks untuk hasil filter', 'bulk-matrix-type', {}, 'small'), U.button('Samakan golongan usulan (hasil filter)', 'equal-golongan', {}, 'small'))));
+    main.append(U.table(['ID / Nama', 'Unit / Departemen', 'Jabatan', 'Status', 'Golongan saat ini', 'Golongan usulan', 'Pokok saat ini', 'Pokok usulan', 'Validasi', 'Tindakan'], employees.map(e => [h('div', {}, h('strong', {}, e.name), h('div', { class: 'muted' }, e.employee_id)), h('div', {}, e.unit || '—', h('div', { class: 'muted' }, e.department || '—')), e.position || '—', U.badge(e.active ? 'Aktif' : 'Nonaktif'), h('div', {}, e.current_golongan || '—', h('small', {}, ' · Jenis: ' + (C.resolveMatrixType(ws(), e, 'current') || e.current_matrix_type || 'Belum ditetapkan'))), h('div', {}, e.proposed_golongan || (ws().globalRules.proposed_defaults_current ? e.current_golongan + ' (default)' : '—'), h('small', {}, ' · Jenis: ' + (C.resolveMatrixType(ws(), e, 'proposed') || e.proposed_matrix_type || 'Belum ditetapkan') + (!e.proposed_matrix_type && ws().globalRules.proposed_matrix_type_defaults_current ? ' (ikuti saat ini)' : ''))), basicCell(e, 'current'), basicCell(e, 'proposed'), validationCount(employeeIssues(e), { index: rows('employees').indexOf(e) }), h('button', { type: 'button', class: 'small', 'data-action': 'employee-actions', 'data-index': rows('employees').indexOf(e), 'aria-haspopup': 'dialog', 'aria-label': 'Tindakan · ' + e.employee_id + ' · ' + e.name, title: 'Tindakan karyawan' }, '…')])));
+    main.append(U.panel('Ringkasan validasi workspace', validationCount(state.issues, {})));
   }
   function basicCell(e, scenario) {
     const value = C.resolveBasic(ws(), e, scenario);
-    return h('div', {}, value === null ? U.badge('Gaji belum terpetakan', 'error') : U.amount(value));
+    return h('div', {}, value === null ? U.badge('Gaji belum terpetakan', 'error') : U.amount(value), hasBasicOverride(e, scenario) ? U.badge('Override gaji pokok · mendahului matriks', 'warning') : h('small', {}, 'Sumber: matriks'));
   }
   function renderComponents(main) {
     main.append(U.heading(...sections.components, U.button('Tetapkan ke karyawan', 'assign', {}, 'primary'), U.button('Tambah komponen', 'edit', { collection: 'componentDefinitions' })));
@@ -128,10 +168,10 @@
   }
   function renderRules(main) {
     main.append(U.heading(...sections.rules, U.button('Edit aturan global & pajak', 'edit-rules', {}, 'primary')));
-    main.append(U.notice('Tarif hukum tidak diasumsikan. Verifikasi tarif, batas upah, kepesertaan, dan basis bersama pengelola payroll. Estimasi PPh 21 adalah model bulanan sederhana, bukan perhitungan pajak resmi atau rekonsiliasi tahunan.'));
+    main.append(U.notice('PPh 21 otomatis terbatas pada orang pribadi dalam negeri, rezim biasa 2024–2026 tanpa DTP/insentif khusus. Pegawai tetap: masa nonfinal selain Desember; tidak tetap: pembayaran bulanan aktual; bukan pegawai: satu imbalan jasa biasa bruto penuh tanpa pengecualian/sharing. Tidak mendukung rekonsiliasi tahunan, harian/mingguan, luar negeri, atau net legacy (gunakan gross_up). Pembulatan pajak ke bawah rupiah penuh adalah asumsi simulasi, bukan klaim kepatuhan pajak lengkap. Verifikasi tarif dan batas BPJS.'));
     main.append(U.panel('Skema pembayaran PPh & BPJS', U.object(Object.fromEntries(U.schemas.paymentPolicies.map(s => [s.label, s.options.find(([value]) => value === (ws().globalRules[s.key] || s.default))?.[1] || 'Tidak valid']))), U.button('Atur skema pembayaran', 'edit-payment-policies', {}, 'primary')));
-    main.append(U.panel('Aturan BPJS', U.table(['Program', 'Tarif karyawan', 'Tarif pemberi kerja', 'Minimum basis', 'Maksimum basis', 'Basis', 'Status', 'Tindakan'], rows('bpjsRules').map((r, index) => [r.name + ' (' + r.code + ')', U.rateDisplay(r.employee_rate) + (r.employee_enabled ? '' : ' · nonaktif'), U.rateDisplay(r.employer_rate) + (r.employer_enabled ? '' : ' · nonaktif'), r.minimum_basis === '' || r.minimum_basis == null ? 'Tanpa batas' : U.amount(r.minimum_basis), r.maximum_basis === '' || r.maximum_basis == null ? 'Tanpa batas' : U.amount(r.maximum_basis), { basic: 'Gaji pokok', selected: 'Pokok + terpilih', gross: 'Bruto' }[r.basis] || r.basis, U.badge(r.active ? 'Aktif' : 'Nonaktif'), controls('edit', index, 'bpjsRules')])), U.button('Tambah program', 'edit', { collection: 'bpjsRules' }, 'small')));
-    main.append(h('div', { class: 'two-column' }, U.panel('Aturan global', U.object(Object.fromEntries(U.schemas.globalRules.filter(s => !s.key.startsWith('tax_')).map(s => [s.label, ws().globalRules[s.key]])))), U.panel('Estimasi PPh 21', h('div', {}, U.object(Object.fromEntries(U.schemas.globalRules.filter(s => s.key.startsWith('tax_')).map(s => [s.label, ws().globalRules[s.key]]))), h('p', { class: 'muted' }, 'Skema PPh dan BPJS ditetapkan terpisah untuk saat ini/usulan pada pengaturan skema pembayaran. Basis iuran tetap sebelum tunjangan BPJS/PPh. PTKP, tarif, dan override nominal pajak diatur pada formulir karyawan.'), U.button('Kelola pengaturan karyawan', 'navigate', { section: 'employees' })))));
+    main.append(U.panel('Aturan BPJS', U.table(['Program', 'Tarif karyawan', 'Tarif pemberi kerja', 'Minimum basis', 'Maksimum basis', 'Basis', 'Status', 'Tindakan'], rows('bpjsRules').map((r, index) => [r.name + ' (' + r.code + ') · pajak: ' + (r.tax_program || 'belum diidentifikasi'), U.rateDisplay(r.employee_rate) + (r.employee_enabled ? '' : ' · nonaktif'), U.rateDisplay(r.employer_rate) + (r.employer_enabled ? '' : ' · nonaktif'), r.minimum_basis === '' || r.minimum_basis == null ? 'Tanpa batas' : U.amount(r.minimum_basis), r.maximum_basis === '' || r.maximum_basis == null ? 'Tanpa batas' : U.amount(r.maximum_basis), { basic: 'Gaji pokok', selected: 'Pokok + terpilih', gross: 'Bruto' }[r.basis] || r.basis, U.badge(r.active ? 'Aktif' : 'Nonaktif'), controls('edit', index, 'bpjsRules')])), U.button('Tambah program', 'edit', { collection: 'bpjsRules' }, 'small')));
+    main.append(h('div', { class: 'two-column' }, U.panel('Aturan global', U.object(Object.fromEntries(U.schemas.globalRules.filter(s => !s.key.includes('tax_')).map(s => [s.label, ws().globalRules[s.key]])))), U.panel('PPh 21 otomatis', h('div', {}, U.object(Object.fromEntries(U.schemas.globalRules.filter(s => s.key.includes('tax_')).map(s => [s.label, ws().globalRules[s.key]]))), h('p', { class: 'muted' }, 'Skema PPh dan BPJS ditetapkan terpisah untuk saat ini/usulan pada pengaturan skema pembayaran. Basis iuran tetap sebelum tunjangan BPJS/PPh. Pilih PTKP dan klasifikasi pajak terverifikasi pada karyawan, bulan pajak dan konfirmasi rezim biasa di aturan global, serta tax_program pada BPJS aktif. Nilai tarif, override, basis, dan pembulatan pajak legacy hanya arsip, tidak dipakai.'), U.button('Kelola pengaturan karyawan', 'navigate', { section: 'employees' })))));
   }
   const metricKeys = ['basic_salary', 'gross', 'employee_bpjs', 'employer_bpjs', 'pph', 'deductions', 'take_home_pay', 'employer_contributions', 'bpjs_allowance', 'tax_allowance', 'employer_tax_cost', 'employer_cost'];
   function resultEmployees(result) {
@@ -146,7 +186,7 @@
         case 'decreased': return delta < 0;
         case 'golongan': return r.current_golongan !== r.proposed_golongan;
         case 'missing': return (r.issues || []).some(i => i.severity === 'error') || employeeIssues(e).some(i => i.severity === 'error');
-        case 'override': return isOverride(e);
+
         default: return true;
       }
     });
@@ -181,11 +221,11 @@
         cells.push(U.amount(r.current[key]), U.amount(r.proposed[key]));
         if (['basic_salary', 'gross', 'take_home_pay', 'employer_cost'].includes(key)) cells.push(U.delta(r.changes[key]));
       }
-      cells.push(U.actions((r.issues || []).length ? U.badge(r.issues.length + ' catatan', 'warning') : U.badge('Siap'), isOverride(e) ? U.badge('Manual', 'override') : null), U.button('Lihat rincian', 'breakdown', { id: r.employee_id }, 'small'));
+      cells.push(U.actions((r.issues || []).length ? U.badge(r.issues.length + ' catatan', 'warning') : U.badge('Siap')), U.button('Lihat rincian', 'breakdown', { id: r.employee_id }, 'small'));
       return cells;
     }))));
     if (result.issues?.length) main.append(U.panel('Catatan hasil simulasi', U.issues(result.issues)));
-    main.append(U.notice('Tinjau perbedaan negatif dan override manual. Estimasi pajak dan BPJS hanya seakurat parameter yang Anda verifikasi.'));
+    main.append(U.notice('Tinjau perbedaan negatif dan klasifikasi pajak. Estimasi pajak dan BPJS hanya seakurat parameter yang Anda verifikasi.'));
   }
   function editRecord(collection, index, duplicate = false) {
     if (!requireWorkspace()) return;
@@ -197,31 +237,80 @@
     }
     if (collection === 'matrices' || collection === 'matrixEntries') record.scenario = record.scenario || state.scenario;
     let schema = U.schemas[collection].map(s => ({ ...s }));
+    if (collection === 'matrices' && !existing) record.matrix_type = C.normalizeMatrixType(state.matrixType) || '';
+    if (collection === 'employees') {
+      for (const scenario of ['current', 'proposed']) {
+        const spec = schema.find(s => s.key === scenario + '_golongan');
+        const typeSpec = schema.find(s => s.key === scenario + '_matrix_type');
+        typeSpec.options = [['', scenario === 'proposed' && ws().globalRules.proposed_matrix_type_defaults_current ? 'Ikuti jenis saat ini (terpisah dari golongan)' : 'Belum ditetapkan'], ...knownTypes().map(t => [t, t])];
+        const entries = typeEntries(record, scenario);
+        spec.type = 'text'; spec.readonly = !hasBasicOverride(record, scenario) && entries.length > 0;
+        delete spec.list;
+        spec.help = 'Golongan dibentuk dari KG, profesional, dan KMK jenis terpilih. Dapat diisi manual bila memakai override gaji pokok atau belum ada entri matriks. Nilai legacy yang tidak tersedia tetap terlihat; buat/impor matriks untuk melengkapi pilihan.';
+        const parsed = C.parseGolongan(record[spec.key]);
+        const dimensions = [['salary_group', 'KG'], ['professional_category', 'Level profesional'], ['kmk_level', 'KMK']];
+        const fields = dimensions.map(([dimension, label], i) => {
+          const key = scenario + '_' + dimension;
+          record[key] = parsed ? String(parsed[dimension]) : '';
+          const matches = entries.filter(e => i === 0 || (String(e.salary_group) === record[scenario + '_salary_group'] && (i === 1 || e.professional_category === record[scenario + '_professional_category'])));
+          return { key, label: (scenario === 'current' ? 'Saat ini' : 'Usulan') + ' · ' + label, type: 'select', options: [['', i === 0 && scenario === 'proposed' && ws().globalRules.proposed_defaults_current ? 'Ikuti golongan saat ini' : 'Pilih ' + label], ...unique(matches.map(e => String(e[dimension]))).map(value => [value, value])], default: '' };
+        });
+        schema.splice(schema.indexOf(spec), 0, ...fields);
+      }
+    }
     if (collection === 'matrixEntries') {
       if (!rows('matrices').length) { U.toast('Tambahkan identitas matriks terlebih dahulu.'); editRecord('matrices'); return; }
-      schema.find(s => s.key === 'matrix_id').options = rows('matrices').map(m => [m.matrix_id, m.name + ' · ' + (m.scenario === 'current' ? 'Saat ini' : 'Usulan')]);
-      record.matrix_id = record.matrix_id || rows('matrices').find(m => m.scenario === state.scenario)?.matrix_id || rows('matrices')[0].matrix_id;
-      record.scenario = rows('matrices').find(m => m.matrix_id === record.matrix_id).scenario;
+      schema.find(s => s.key === 'matrix_id').options = rows('matrices').map(m => [m.matrix_id, m.name + ' · ' + (m.matrix_type || 'Jenis belum ditetapkan') + ' · ' + (m.scenario === 'current' ? 'Saat ini' : 'Usulan')]);
+      record.matrix_id = record.matrix_id || state.matrixId || rows('matrices')[0].matrix_id;
+      record.scenario = rows('matrices').find(m => m.matrix_id === record.matrix_id)?.scenario || record.scenario;
     }
     if (collection === 'componentDefinitions' && record.calculation_type?.startsWith('percentage')) record.default_value = U.rateToPercent(record.default_value);
     const names = { employees: 'karyawan', matrices: 'matriks', matrixEntries: 'entri matriks', componentDefinitions: 'komponen', bpjsRules: 'program BPJS' };
-    const extra = collection === 'employees' ? h('div', {}, U.notice('Gaji pokok saat ini dan usulan selalu mengikuti matriks berdasarkan golongan. Override gaji pokok dinonaktifkan, termasuk nilai lama dari CSV. Nominal pajak menggunakan rupiah bulat tanpa pemisah ribuan. Skema PPh dan BPJS mengikuti pengaturan saat ini/usulan di Aturan perhitungan. Tarif pajak tidak ditetapkan otomatis.'), U.issues(existing ? employeeIssues(existing) : []), h('datalist', { id: 'golongan-list' }, unique(rows('matrixEntries').map(e => e.golongan)).map(code => h('option', { value: code })))) : collection === 'bpjsRules' ? U.notice('Masukkan tarif yang sudah diverifikasi. Tidak ada tarif hukum bawaan; kolom persen 1 berarti 1%.') : null;
+    const extra = collection === 'employees' ? h('div', {}, U.notice('Gaji pokok mengikuti jenis matriks dan golongan. Peringatan: override gaji pokok opsional (Rp, termasuk nol) dipakai lebih dahulu daripada matriks. Kosongkan untuk kembali ke matriks. Jenis usulan kosong mengikuti jenis saat ini hanya jika aturan jenis aktif, terpisah dari fallback golongan. PPh dihitung otomatis dari klasifikasi terverifikasi, bukan status kontrak. Lengkapi PTKP, residensi, kategori, masa, dan cakupan pembayaran; kosong atau PTKP legacy tidak valid harus diperbaiki sebelum pajak dihitung. Tarif dan override pajak lama hanya arsip dan diabaikan. Skema PPh/BPJS mengikuti pengaturan saat ini/usulan.'), U.issues(existing ? employeeIssues(existing) : []), h('datalist', { id: 'golongan-list' }, unique(rows('matrixEntries').map(e => e.golongan)).map(code => h('option', { value: code })))) : collection === 'bpjsRules' ? U.notice('Masukkan tarif yang sudah diverifikasi. Tidak ada tarif hukum bawaan; kolom persen 1 berarti 1%.') : null;
     U.form((existing && !duplicate ? 'Edit ' : duplicate ? 'Duplikat ' : 'Tambah ') + names[collection], schema, record, (data) => {
+      if (collection === 'employees') {
+        for (const scenario of ['current', 'proposed']) {
+          const keys = ['salary_group', 'professional_category', 'kmk_level'].map(d => scenario + '_' + d);
+          if (!schema.some(s => s.key === keys[0])) continue;
+          const values = keys.map(key => data[key]);
+          const manual = hasBasicOverride(data, scenario) || !typeEntries(data, scenario).length;
+          if (!manual && values.some(Boolean) && !values.every(Boolean)) throw new Error('Lengkapi KG, level profesional, dan KMK ' + scenario + '.');
+          data[scenario + '_golongan'] = manual ? (data[scenario + '_golongan'] || '') : (values.every(Boolean) ? C.golongan(...values) : (data[scenario + '_golongan'] === record[scenario + '_golongan'] ? record[scenario + '_golongan'] || '' : ''));
+          keys.forEach(key => { delete data[key]; });
+        }
+      }
       const target = existing && !duplicate ? Number(index) : -1;
       const key = { employees: 'employee_id', matrices: 'matrix_id', componentDefinitions: 'code', bpjsRules: 'code' }[collection];
       if (key && rows(collection).some((r, i) => i !== target && r[key] === data[key])) throw new Error('ID/kode sudah digunakan. Gunakan nilai unik.');
-      if (collection === 'matrices' && rows('matrices').some((m, i) => i !== target && m.scenario === data.scenario)) throw new Error('Hanya satu matriks diperbolehkan per skenario. Edit matriks yang sudah ada atau pilih skenario lain.');
+      if (collection === 'matrices') {
+        data.matrix_type = C.normalizeMatrixType(data.matrix_type);
+        if (!data.matrix_type) throw new Error('Jenis matriks harus diawali huruf, lalu huruf, angka, _ atau -.');
+        if (rows('matrices').some((m, i) => i !== target && m.scenario === data.scenario && C.normalizeMatrixType(m.matrix_type) === data.matrix_type)) throw new Error('Jenis matriks sudah ada pada skenario ini.');
+      }
             if (collection === 'employees' && data.active && !data.current_golongan) throw new Error('Golongan saat ini wajib untuk karyawan aktif.');
             if (collection === 'employees') {
-              // Preserve legacy data for CSV compatibility, never as a salary source.
-              data.current_basic_override = existing?.current_basic_override ?? '';
-              data.proposed_basic_override = existing?.proposed_basic_override ?? '';
-              data.pph_method = 'gross_up';
+
+              for (const scenario of ['current', 'proposed']) {
+                const key = scenario + '_matrix_type';
+                if (data[key]) {
+                  const type = C.normalizeMatrixType(data[key]);
+                  if (!type) throw new Error('Jenis matriks tidak valid.');
+                  data[key] = type;
+                }
+                const override = data[scenario + '_basic_override'];
+                if (override !== '' && override != null && (!Number.isSafeInteger(override) || override < 0)) throw new Error('Override harus rupiah bulat nonnegatif.');
+              }
+              // Manual PPh remains archival; salary overrides above are active inputs.
+              data.pph_rate = existing?.pph_rate ?? '';
+              data.pph_fixed_override = existing?.pph_fixed_override ?? '';
+              data.pph_method = existing?.pph_method ?? 'gross_up';
               for (const key of ['current_golongan', 'proposed_golongan']) {
                 if (!data[key]) continue;
                 const parsed = C.parseGolongan(data[key]);
                 if (!parsed) throw new Error('Format golongan tidak valid: ' + data[key] + '. Contoh: 3-PM8.');
                 data[key] = C.golongan(parsed.salary_group, parsed.professional_category, parsed.kmk_level);
+                const entries = typeEntries(data, key.split('_')[0]);
+                if (!hasBasicOverride(data, key.split('_')[0]) && entries.length && entries.filter(e => e.golongan === data[key]).length !== 1) throw new Error('Pilih golongan yang tersedia dan tidak duplikat pada matriks ' + (key === 'current_golongan' ? 'saat ini' : 'usulan') + '.');
               }
             }
       if (collection === 'matrixEntries') {
@@ -230,7 +319,7 @@
         if (!data.golongan) throw new Error('Kelompok, kategori profesional, atau KMK tidak membentuk golongan yang valid.');
         data.salary_group = String(data.salary_group);
         data.scenario = rows('matrices').find(m => m.matrix_id === data.matrix_id).scenario;
-        if (rows(collection).some((r, i) => i !== target && r.scenario === data.scenario && r.golongan === data.golongan)) throw new Error('Golongan tersebut sudah ada pada skenario ini.');
+        if (rows(collection).some((r, i) => i !== target && r.matrix_id === data.matrix_id && r.golongan === data.golongan)) throw new Error('Golongan tersebut sudah ada pada matriks ini.');
       }
       if (collection === 'componentDefinitions') {
         if (!data.calculation_type.startsWith('percentage') && !Number.isSafeInteger(data.default_value)) throw new Error('Nominal komponen harus rupiah bulat yang aman.');
@@ -240,16 +329,68 @@
       const commit = () => {
         mutate(w => {
           if (target >= 0) w[collection][target] = data; else w[collection].push(data);
+          if (collection === 'matrices') { state.scenario = data.scenario; state.matrixType = data.matrix_type; state.matrixId = data.matrix_id; }
           if (existing && !duplicate && collection === 'employees') w.employeeComponents.forEach(a => { if (a.employee_id === existing.employee_id) a.employee_id = data.employee_id; });
           if (existing && collection === 'componentDefinitions') w.employeeComponents.forEach(a => { if (a.component_code === existing.code) a.component_code = data.code; });
           if (existing && collection === 'matrices') w.matrixEntries.forEach(e => { if (e.matrix_id === existing.matrix_id) { e.matrix_id = data.matrix_id; e.scenario = data.scenario; } });
         });
         U.close(); U.toast('Data disimpan di layar. Ekspor workspace untuk menyimpan file.');
       };
-      if (existing && collection === 'matrices' && data.scenario !== existing.scenario) U.confirm('Ubah skenario matriks?', h('p', {}, 'Seluruh entri matriks ini akan ikut berpindah skenario. Periksa kembali resolusi gaji dan duplikasi golongan setelah perubahan.'), commit);
+      if (existing && collection === 'matrices' && (data.scenario !== existing.scenario || data.matrix_type !== existing.matrix_type)) U.confirm('Ubah skenario / jenis matriks?', h('p', {}, 'Seluruh entri matriks ini mengikuti identitas yang diubah. Jenis karyawan dan override tidak diubah; periksa kembali resolusi gaji setelah perubahan.'), commit);
       else if (existing && collection === 'componentDefinitions' && existing.calculation_type.startsWith('percentage') !== data.calculation_type.startsWith('percentage') && rows('employeeComponents').some(a => a.component_code === existing.code)) U.confirm('Ubah satuan komponen?', h('p', {}, 'Nilai penugasan yang sudah ada tidak dikonversi otomatis. Perubahan antara rupiah dan persen mengubah maknanya; tinjau semua penugasan setelah menyimpan.'), commit);
       else commit();
     }, extra, form => {
+      if (collection === 'employees') {
+        for (const scenario of ['current', 'proposed']) {
+          const group = form.elements.namedItem(scenario + '_salary_group');
+          if (!group) continue;
+          const category = form.elements.namedItem(scenario + '_professional_category');
+          const level = form.elements.namedItem(scenario + '_kmk_level');
+          const type = form.elements.namedItem(scenario + '_matrix_type');
+          const currentType = form.elements.namedItem('current_matrix_type');
+          const golonganInput = form.elements.namedItem(scenario + '_golongan');
+          const overrideInput = form.elements.namedItem(scenario + '_basic_override');
+          const getEntries = () => typeEntries({ current_matrix_type: currentType.value, proposed_matrix_type: form.elements.namedItem('proposed_matrix_type').value }, scenario);
+          let manual;
+          const updateReadonly = () => {
+            const nextManual = Boolean(overrideInput && overrideInput.value.trim() !== '') || !getEntries().length;
+            if (manual === true && !nextManual) {
+              populate(group, getEntries().map(e => e.salary_group), 'KG');
+              populate(category, [], 'level profesional');
+              populate(level, [], 'KMK');
+              golonganInput.value = '';
+            }
+            manual = nextManual;
+            golonganInput.readOnly = !manual;
+            group.disabled = manual;
+            category.disabled = manual || !group.value;
+            level.disabled = manual || !category.value;
+          };
+          const populate = (input, values, label) => {
+            input.replaceChildren(h('option', { value: '' }, 'Pilih ' + label), ...unique(values.map(String)).map(value => h('option', { value }, value)));
+            input.value = ''; input.disabled = !values.length;
+          };
+          const sync = () => { if (!manual) golonganInput.value = group.value && category.value && level.value ? C.golongan(group.value, category.value, level.value) : ''; };
+          group.addEventListener('change', () => { populate(category, getEntries().filter(e => String(e.salary_group) === group.value).map(e => e.professional_category), 'level profesional'); populate(level, [], 'KMK'); sync(); });
+          category.addEventListener('change', () => { populate(level, getEntries().filter(e => String(e.salary_group) === group.value && e.professional_category === category.value).map(e => e.kmk_level), 'KMK'); sync(); });
+          level.addEventListener('change', sync);
+          if (overrideInput) {
+            overrideInput.addEventListener('input', updateReadonly);
+            overrideInput.addEventListener('change', updateReadonly);
+          }
+          const resetType = () => {
+            populate(group, getEntries().map(e => e.salary_group), scenario === 'proposed' && ws().globalRules.proposed_defaults_current ? 'KG / ikuti golongan saat ini' : 'KG');
+            populate(category, [], 'level profesional');
+            populate(level, [], 'KMK');
+            updateReadonly();
+            sync();
+          };
+          type.addEventListener('change', resetType);
+          if (scenario === 'proposed') currentType.addEventListener('change', () => { if (!type.value && ws().globalRules.proposed_matrix_type_defaults_current) resetType(); });
+          category.disabled = !group.value; level.disabled = !category.value;
+          updateReadonly();
+        }
+      }
       if (collection === 'matrixEntries') {
         const update = () => {
           const values = form.elements;
@@ -316,7 +457,9 @@
   }
   function matrixGenerator(matrices) {
     const scenario = state.scenario;
+    const matrixType = state.matrixType;
     const target = h('select', { name: 'generator-matrix', 'aria-label': 'Matriks tujuan' }, matrices.length ? matrices.map(m => h('option', { value: m.matrix_id }, m.name)) : h('option', { value: '' }, 'Buat matriks otomatis'));
+    target.value = matrices[0]?.matrix_id || '';
     const schema = Array.from({ length: 5 }, (_, i) => [
       { key: 'base_' + i, label: 'KG ' + (i + 1) + ' · Gaji awal (Rp)', type: 'number', min: 1, step: 'any' },
       { key: 'cola_' + i, label: 'KG ' + (i + 1) + ' · COLA (%)', type: 'rate', min: 0 },
@@ -339,26 +482,28 @@
     form.addEventListener('submit', event => {
       event.preventDefault();
       try {
+        if (!C.normalizeMatrixType(matrixType)) throw new Error('Tetapkan jenis matriks yang valid terlebih dahulu.');
         const data = U.readForm(form, schema);
         const settings = Array.from({ length: 5 }, (_, i) => ({ base_salary: data['base_' + i], cola: data['cola_' + i], kmk_index: data['kmk_' + i] }));
         let matrixId = target.value;
         if (!matrixId) {
-          matrixId = 'matrix-' + scenario;
+          matrixId = 'matrix-' + scenario + '-' + matrixType;
           while (rows('matrices').some(m => m.matrix_id === matrixId)) matrixId += '-2';
         }
         const generated = C.generateMatrix(settings, scenario, matrixId, ws().globalRules.rounding);
         const codes = new Set(generated.map(e => e.golongan));
-        const existing = rows('matrixEntries').filter(e => e.scenario === scenario && codes.has(e.golongan));
+        const existing = rows('matrixEntries').filter(e => e.matrix_id === matrixId && codes.has(e.golongan));
         const preview = U.table(['Golongan', 'Sebelum', 'Sesudah'], generated.map(e => {
           const matches = existing.filter(old => old.golongan === e.golongan);
           return [e.golongan, matches.length ? matches.map(old => U.amount(old.basic_salary)) : '—', U.amount(e.basic_salary)];
         }));
-        U.confirm('Pratinjau matriks otomatis · ' + (scenario === 'current' ? 'Saat ini' : 'Usulan'), h('div', {}, U.notice(dirtyWarning() + existing.length + ' entri yang cocok pada skenario ini akan diganti, termasuk edit manual dan entri dari identitas matriks lain. Golongan di luar KG 1–5 / PM,P,M,U / KMK 1–15 tetap dipertahankan. Gaji pokok karyawan mengikuti matriks; override gaji pokok lama diabaikan. Belum ada perubahan sampai diterapkan.'), preview), () => {
+        U.confirm('Pratinjau matriks otomatis · ' + (scenario === 'current' ? 'Saat ini' : 'Usulan'), h('div', {}, U.notice(dirtyWarning() + existing.length + ' entri yang cocok pada matriks terpilih ' + matrixId + ' (' + matrixType + ') akan diganti. Identitas dan jenis lain tidak berubah. Golongan di luar KG 1–5 / PM,P,M,U / KMK 1–15 tetap dipertahankan. Override gaji pokok karyawan tidak diubah dan tetap mendahului matriks. Belum ada perubahan sampai diterapkan.'), preview), () => {
           mutate(w => {
             let matrix = w.matrices.find(m => m.matrix_id === matrixId);
-            if (!matrix) { matrix = { matrix_id: matrixId, scenario, name: 'Matriks otomatis · ' + (scenario === 'current' ? 'Saat ini' : 'Usulan'), effective_date: '' }; w.matrices.push(matrix); }
+            if (!matrix) { matrix = { matrix_id: matrixId, matrix_type: matrixType, scenario, name: 'Matriks otomatis · ' + (scenario === 'current' ? 'Saat ini' : 'Usulan'), effective_date: '' }; w.matrices.push(matrix); }
             matrix.generator_settings = JSON.stringify(settings);
-            w.matrixEntries = w.matrixEntries.filter(e => !(e.scenario === scenario && codes.has(e.golongan))).concat(generated.map(e => ({ ...e, note: existing.find(old => old.golongan === e.golongan)?.note || '' })));
+            w.matrixEntries = w.matrixEntries.filter(e => !(e.matrix_id === matrixId && codes.has(e.golongan))).concat(generated.map(e => ({ ...e, note: existing.find(old => old.golongan === e.golongan)?.note || '' })));
+            state.matrixId = matrixId;
             state.matrixView = 'grid';
           });
           U.close(); U.toast('300 gaji diterapkan. Ekspor workspace untuk menyimpan parameter dan hasil.');
@@ -368,28 +513,31 @@
     return U.panel('Matriks otomatis · cukup 3 input per KG', form);
   }
   function copyMatrix() {
-    const current = rows('matrixEntries').filter(e => e.scenario === 'current');
-    if (!current.length) { U.toast('Matriks saat ini belum memiliki entri.'); return; }
-    confirmMutation('Salin matriks saat ini ke usulan?', dirtyWarning() + 'Seluruh matriks dan entri usulan akan diganti dengan salinan saat ini (' + current.length + ' entri). Data karyawan tidak berubah.', w => {
-      w.matrices = w.matrices.filter(m => m.scenario !== 'proposed');
-      const mapping = new Map();
-      for (const matrix of w.matrices.filter(m => m.scenario === 'current')) {
-        let id = matrix.matrix_id + '-usulan';
-        while (w.matrices.some(m => m.matrix_id === id)) id += '-2';
-        mapping.set(matrix.matrix_id, id);
-        w.matrices.push({ ...matrix, matrix_id: id, scenario: 'proposed', name: matrix.name + ' — usulan', effective_date: '' });
-      }
-      w.matrixEntries = w.matrixEntries.filter(e => e.scenario !== 'proposed').concat(current.map(e => ({ ...e, matrix_id: mapping.get(e.matrix_id), scenario: 'proposed' })));
-      state.scenario = 'proposed';
+    const source = rows('matrices').find(m => m.matrix_id === state.matrixId);
+    const current = selectedEntries();
+    if (!source || !C.normalizeMatrixType(source.matrix_type)) { U.toast('Pilih matriks dengan jenis valid.'); return; }
+    if (!current.length) { U.toast('Matriks sumber kosong; tidak ada entri untuk disalin.'); return; }
+    const scenario = state.scenario === 'current' ? 'proposed' : 'current';
+    const type = C.normalizeMatrixType(source.matrix_type);
+    const targets = rows('matrices').filter(m => m.scenario === scenario && C.normalizeMatrixType(m.matrix_type) === type);
+    if (targets.length > 1) { U.toast('Identitas tujuan ambigu; perbaiki duplikasi jenis terlebih dahulu.'); return; }
+    let id = targets[0]?.matrix_id || source.matrix_id + '-' + scenario;
+    if (!targets.length) while (rows('matrices').some(m => m.matrix_id === id)) id += '-2';
+    confirmMutation('Salin matriks terpilih ke ' + scenario + '?', dirtyWarning() + source.matrix_id + ' · ' + type + ' → ' + id + ' (' + current.length + ' entri). Hanya matriks tujuan jenis ini beserta parameter generator diganti. Jenis lain, karyawan, dan seluruh override tetap dipertahankan.', w => {
+      const matrix = { ...clone(source), matrix_id: id, scenario, matrix_type: type };
+      const index = w.matrices.findIndex(m => m.matrix_id === id);
+      if (index < 0) w.matrices.push(matrix); else w.matrices[index] = matrix;
+      w.matrixEntries = w.matrixEntries.filter(e => e.matrix_id !== id).concat(current.map(e => ({ ...e, matrix_id: id, scenario })));
+      state.scenario = scenario; state.matrixType = type; state.matrixId = id;
     });
   }
   function adjustMatrix() {
-    const entries = rows('matrixEntries').filter(e => e.scenario === state.scenario);
+    const entries = selectedEntries();
     if (!entries.length) { U.toast('Belum ada entri pada skenario ini.'); return; }
     const groupChecks = h('div', { class: 'check-list' }, unique(entries.map(e => String(e.salary_group))).map(g => h('label', {}, h('input', { type: 'checkbox', name: 'group', value: g, checked: true }), 'Kelompok ' + g)));
     const categoryChecks = h('div', { class: 'check-list' }, unique(entries.map(e => e.professional_category)).map(c => h('label', {}, h('input', { type: 'checkbox', name: 'category', value: c, checked: true }), c)));
     const schema = [{ key: 'rate', label: 'Penyesuaian (%) — negatif untuk penurunan', type: 'rate', min: -100, required: true, help: '9 berarti naik 9%, -5 berarti turun 5%.' }, U.schemas.globalRules.find(s => s.key === 'rounding')];
-    U.form('Penyesuaian matriks · ' + (state.scenario === 'current' ? 'Saat ini' : 'Usulan'), schema, { rounding: ws().globalRules.rounding }, (data, form) => {
+    U.form('Penyesuaian matriks · ' + state.matrixId + ' · ' + state.matrixType + ' · ' + (state.scenario === 'current' ? 'Saat ini' : 'Usulan'), schema, { rounding: ws().globalRules.rounding }, (data, form) => {
       const selected = name => [...form.querySelectorAll('[name="' + name + '"]:checked')].map(i => i.value);
       const groups = selected('group'), categories = selected('category');
       const matches = entries.filter(e => groups.includes(String(e.salary_group)) && categories.includes(e.professional_category));
@@ -397,7 +545,7 @@
       const adjusted = C.adjustMatrix(clone(matches), data.rate, data.rounding);
       if (!Array.isArray(adjusted) || adjusted.length !== matches.length) throw new Error('Ketidakcocokan API adjustMatrix: daftar entri tidak sesuai.');
       const preview = U.table(['Golongan', 'Sebelum', 'Sesudah', 'Perubahan'], matches.map((e, i) => [e.golongan, U.amount(e.basic_salary), U.amount(adjusted[i].basic_salary), U.delta(C.change(e.basic_salary, adjusted[i].basic_salary))]));
-      U.confirm('Pratinjau penyesuaian · ' + matches.length + ' entri', h('div', {}, U.notice('Belum diterapkan. Periksa nominal dan pembulatan sebelum mengonfirmasi.'), preview), () => {
+      U.confirm('Pratinjau penyesuaian · ' + matches.length + ' entri', h('div', {}, U.notice('Hanya matriks terpilih ' + state.matrixId + ' · ' + state.matrixType + '. Matriks lain dan override karyawan tidak berubah. Belum diterapkan. Periksa nominal dan pembulatan sebelum mengonfirmasi.'), preview), () => {
         mutate(w => { matches.forEach((e, i) => { w.matrixEntries[rows('matrixEntries').indexOf(e)] = adjusted[i]; }); });
         U.close(); U.toast('Penyesuaian matriks diterapkan.');
       }, 'Terapkan penyesuaian');
@@ -464,9 +612,19 @@
     const r = state.result?.employees.find(e => e.employee_id === id);
     if (!r) return;
     const employee = rows('employees').find(e => e.employee_id === id);
-    U.dialog('Rincian · ' + r.name + ' (' + id + ')', h('div', {}, isOverride(employee) ? U.notice('OVERRIDE PAJAK — PPh menggunakan nilai eksplisit. Gaji pokok tetap mengikuti matriks. Lihat input di bawah untuk membedakan nilai nol dari nilai kosong.') : null, U.table(['Ukuran', 'Saat ini', 'Usulan'], metricKeys.map(key => [U.labels[key], U.amount(r.current[key]), U.amount(r.proposed[key])])), U.issues(r.issues), h('div', { class: 'two-column' }, h('section', {}, h('h3', {}, 'Rincian perhitungan saat ini'), U.object(r.current.breakdown)), h('section', {}, h('h3', {}, 'Rincian perhitungan usulan'), U.object(r.proposed.breakdown))), h('details', {}, h('summary', {}, 'Input karyawan & penugasan'), U.object(employee), U.object(rows('employeeComponents').filter(a => a.employee_id === id)))), [U.button('Edit karyawan', 'edit', { collection: 'employees', index: rows('employees').indexOf(employee) }, 'primary')]);
+    const hasOverride = hasBasicOverride(employee, 'current') || hasBasicOverride(employee, 'proposed');
+    U.dialog('Rincian · ' + r.name + ' (' + id + ')', h('div', {}, hasOverride ? U.notice('OVERRIDE GAJI POKOK — Gaji pokok menggunakan nilai eksplisit yang mendahului matriks. PPh 21 dihitung otomatis dari penghasilan kena pajak.') : null, U.table(['Ukuran', 'Saat ini', 'Usulan'], metricKeys.map(key => [U.labels[key], U.amount(r.current[key]), U.amount(r.proposed[key])])), U.issues(r.issues), h('div', { class: 'two-column' }, h('section', {}, h('h3', {}, 'Rincian perhitungan saat ini'), U.object(r.current.breakdown)), h('section', {}, h('h3', {}, 'Rincian perhitungan usulan'), U.object(r.proposed.breakdown))), h('details', {}, h('summary', {}, 'Input karyawan & penugasan'), U.object(employee), U.object(rows('employeeComponents').filter(a => a.employee_id === id)))), [U.button('Edit karyawan', 'edit', { collection: 'employees', index: rows('employees').indexOf(employee) }, 'primary')]);
   }
   const actions = {
+    'employee-actions': data => {
+      const index = Number(data.index);
+      const employee = rows('employees')[index];
+      if (!employee) return;
+      U.dialog('Tindakan · ' + employee.employee_id + ' · ' + employee.name,
+        controls('edit', index, 'employees', true));
+    },
+    'employee-validation': showEmployeeValidation,
+    'repair-section': data => { U.close(); actions.navigate(data); },
     navigate: data => { state.section = data.section; state.filters = {}; render(); document.getElementById('main').focus(); },
     new: () => {
       const create = () => { replace(C.createWorkspace(), false); actions['edit-metadata'](); };
@@ -484,17 +642,28 @@
     delete: data => deleteRecord(data.collection, data.index),
     assign: data => assign(data.index),
     'copy-matrix': copyMatrix,
+    'bulk-matrix-type': () => {
+      const indexes = filteredEmployees().map(e => rows('employees').indexOf(e));
+      if (!indexes.length) { U.toast('Tidak ada karyawan dalam hasil filter.'); return; }
+      U.form('Tetapkan jenis matriks untuk hasil filter · ' + indexes.length + ' karyawan', [
+        { key: 'scenario', label: 'Skenario', type: 'select', options: [['current', 'Saat ini'], ['proposed', 'Usulan']], default: 'current' },
+        { key: 'matrix_type', label: 'Jenis matriks', type: 'select', options: knownTypes().map(t => [t, t]), required: true }
+      ], {}, data => {
+        if (!['current', 'proposed'].includes(data.scenario) || !knownTypes().includes(data.matrix_type)) throw new Error('Pilih skenario dan jenis matriks yang tersedia.');
+        confirmMutation('Tetapkan jenis matriks?', indexes.length + ' karyawan · ' + data.scenario + ' · ' + data.matrix_type + '. Golongan, override gaji pokok, arsip pajak, dan penugasan komponen tetap dipertahankan. Tinjau kecocokan golongan setelah perubahan.', w => indexes.forEach(i => { w.employees[i][data.scenario + '_matrix_type'] = data.matrix_type; }));
+      });
+    },
     'adjust-matrix': adjustMatrix,
     'equal-golongan': () => {
       const employees = filteredEmployees();
       if (!employees.length) { U.toast('Tidak ada karyawan dalam hasil filter.'); return; }
       const ids = new Set(employees.map(e => e.employee_id));
-      confirmMutation('Samakan golongan usulan?', employees.length + ' karyawan pada hasil filter akan memakai golongan saat ini sebagai golongan usulan. Gaji pokok usulan mengikuti matriks; override gaji pokok lama diabaikan.', w => w.employees.forEach(e => { if (ids.has(e.employee_id)) e.proposed_golongan = e.current_golongan; }));
+      confirmMutation('Samakan golongan usulan?', employees.length + ' karyawan pada hasil filter akan memakai golongan saat ini sebagai golongan usulan. Jenis matriks dan override gaji pokok tetap dipertahankan; override tetap mendahului matriks.', w => w.employees.forEach(e => { if (ids.has(e.employee_id)) e.proposed_golongan = e.current_golongan; }));
     },
     import: data => importFile(data.kind),
     'export-workspace': () => { if (!requireWorkspace()) return; download(C.csv.exportWorkspace(ws()), 'caroll-workspace.csv'); state.dirty = false; render(); U.toast('Unduhan workspace dimulai. Pastikan file CSV berhasil tersimpan di folder unduhan.'); },
     'export-employees': () => { if (requireWorkspace()) { download(C.csv.exportEmployees(ws()), 'caroll-karyawan.csv'); U.toast('Ekspor karyawan dimulai; status workspace tidak berubah.'); } },
-    'export-matrix': () => download(C.csv.exportMatrix(ws(), state.scenario), 'caroll-matriks-' + state.scenario + '.csv'),
+    'export-matrix': () => { if (!state.matrixId || !C.normalizeMatrixType(state.matrixType)) { U.toast('Pilih matriks dengan jenis valid sebelum ekspor.'); return; } download(C.csv.exportMatrix(ws(), state.scenario, state.matrixType, state.matrixId), 'caroll-matriks-' + state.scenario + '-' + state.matrixType + '.csv'); },
     'export-results': () => exportResults(false),
     print: () => exportResults(true),
     calculate: () => { state.result = C.calculatePayroll(ws()); render(); U.toast(state.result.totals ? 'Simulasi selesai dihitung.' : 'Perhitungan diblokir oleh kesalahan data.'); },
@@ -509,7 +678,7 @@
   function applyFilter(input) {
     const key = input.dataset.filter;
     const selection = input.selectionStart;
-    if (key === 'scenario' || key === 'matrixView') state[key] = input.value;
+    if (['scenario', 'matrixView', 'matrixType', 'matrixId'].includes(key)) state[key] = input.value;
     else state.filters[key] = input.value;
     render();
     const replacement = document.querySelector('[data-filter="' + key + '"]');
@@ -518,7 +687,7 @@
   document.addEventListener('change', event => { if (event.target.matches('select[data-filter]')) applyFilter(event.target); });
   document.addEventListener('input', event => { if (event.target.matches('input[data-filter]')) applyFilter(event.target); });
   window.addEventListener('beforeunload', event => { if (state.dirty) { event.preventDefault(); event.returnValue = ''; } });
-  const missing = ['createWorkspace', 'sampleWorkspace', 'golongan', 'parseGolongan', 'resolveBasic', 'adjustMatrix', 'validate', 'calculatePayroll', 'change'].filter(key => typeof C[key] !== 'function');
+  const missing = ['createWorkspace', 'sampleWorkspace', 'golongan', 'parseGolongan', 'normalizeMatrixType', 'resolveMatrixType', 'resolveBasic', 'adjustMatrix', 'validate', 'calculatePayroll', 'change'].filter(key => typeof C[key] !== 'function');
   const missingCSV = ['parse', 'stringify', 'exportWorkspace', 'importWorkspace', 'exportEmployees', 'previewEmployees', 'previewMatrix', 'exportMatrix', 'exportResults'].filter(key => typeof C.csv?.[key] !== 'function');
   if (missing.length || missingCSV.length) {
     document.getElementById('main').replaceChildren(U.heading('Modul lokal belum lengkap', 'Seluruh file JavaScript harus tersedia di folder js.'), U.notice('Ketidakcocokan API / modul belum tersedia: ' + [...missing.map(k => 'Caroll.' + k), ...missingCSV.map(k => 'Caroll.csv.' + k)].join(', ') + '. Muat ulang setelah semua modul lokal tersedia.'));

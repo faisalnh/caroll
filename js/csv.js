@@ -2,27 +2,35 @@
 (function (C) {
   'use strict';
 
-  const employeeFields = 'employee_id name current_golongan unit department position employment_status join_date active proposed_golongan current_basic_override proposed_basic_override ptkp_status bpjs_kesehatan bpjs_ketenagakerjaan pph_method pph_rate pph_fixed_override notes'.split(' ');
+  const employeeFields = 'employee_id name current_golongan current_matrix_type proposed_matrix_type unit department position employment_status join_date active proposed_golongan current_basic_override proposed_basic_override ptkp_status tax_category tax_residency tax_period_type tax_payment_scope bpjs_kesehatan bpjs_ketenagakerjaan pph_method pph_rate pph_fixed_override notes'.split(' ');
   const fields = {
     workspace: 'name current_period proposed_period'.split(' '),
-    matrix: 'matrix_id name scenario effective_date generator_settings'.split(' '),
+    matrix: 'matrix_id name scenario matrix_type effective_date generator_settings'.split(' '),
     matrix_entry: 'matrix_id scenario salary_group professional_category kmk_level golongan basic_salary note'.split(' '),
     employee: employeeFields,
     component_definition: 'code name category direction calculation_type default_value taxable bpjs_kesehatan bpjs_ketenagakerjaan applies_current applies_proposed active rounding notes'.split(' '),
     employee_component: 'employee_id component_code current_value proposed_value'.split(' '),
-    bpjs_rule: 'code name employee_rate employer_rate minimum_basis maximum_basis basis employee_enabled employer_enabled rounding active'.split(' '),
-    global_rule: 'currency rounding percentage_precision include_inactive allow_negative_thp proposed_defaults_current tax_enabled tax_basis tax_rounding'.split(' ').concat(Object.keys(C.paymentPolicies))
+    bpjs_rule: 'code name tax_program employee_rate employer_rate minimum_basis maximum_basis basis employee_enabled employer_enabled rounding active'.split(' '),
+    global_rule: 'currency rounding percentage_precision include_inactive allow_negative_thp proposed_defaults_current proposed_matrix_type_defaults_current tax_enabled tax_basis tax_rounding current_tax_month proposed_tax_month tax_regime'.split(' ').concat(Object.keys(C.paymentPolicies))
   };
   const collections = { matrix: 'matrices', matrix_entry: 'matrixEntries', employee: 'employees', component_definition: 'componentDefinitions', employee_component: 'employeeComponents', bpjs_rule: 'bpjsRules' };
   const workspaceHeaders = ['schema_version', 'record_type', 'record_id', ...new Set(Object.values(fields).flat())];
-  const matrixHeaders = 'scenario golongan basic_salary matrix_name effective_date salary_group professional_category kmk_level note'.split(' ');
-  const resultHeaders = 'employee_id name unit department current_golongan proposed_golongan current_basic_salary proposed_basic_salary basic_change basic_change_percent current_gross proposed_gross gross_change gross_change_percent current_employee_bpjs proposed_employee_bpjs current_employer_bpjs proposed_employer_bpjs current_pph proposed_pph current_deductions proposed_deductions current_take_home_pay proposed_take_home_pay thp_change thp_change_percent current_employer_cost proposed_employer_cost employer_cost_change validation_status'.split(' ');
-  const booleanFields = new Set('active taxable bpjs_kesehatan bpjs_ketenagakerjaan applies_current applies_proposed employee_enabled employer_enabled include_inactive allow_negative_thp proposed_defaults_current tax_enabled'.split(' '));
+  const matrixHeaders = 'scenario matrix_type golongan basic_salary matrix_name effective_date salary_group professional_category kmk_level note'.split(' ');
+  const resultHeaders = 'employee_id name unit department current_golongan proposed_golongan current_matrix_type proposed_matrix_type current_basic_salary proposed_basic_salary basic_change basic_change_percent current_gross proposed_gross gross_change gross_change_percent current_employee_bpjs proposed_employee_bpjs current_employer_bpjs proposed_employer_bpjs current_pph proposed_pph current_deductions proposed_deductions current_take_home_pay proposed_take_home_pay thp_change thp_change_percent current_employer_cost proposed_employer_cost employer_cost_change validation_status'.split(' ');
+  const booleanFields = new Set('active taxable bpjs_kesehatan bpjs_ketenagakerjaan applies_current applies_proposed employee_enabled employer_enabled include_inactive allow_negative_thp proposed_defaults_current proposed_matrix_type_defaults_current tax_enabled'.split(' '));
   const moneyFields = new Set('basic_salary current_basic_override proposed_basic_override pph_fixed_override minimum_basis maximum_basis'.split(' '));
   const numberFields = new Set('default_value current_value proposed_value employee_rate employer_rate pph_rate'.split(' '));
   const integerFields = new Set(['salary_group', 'kmk_level', 'percentage_precision', 'rounding', 'tax_rounding']);
   const nullableFields = new Set('current_basic_override proposed_basic_override pph_fixed_override minimum_basis maximum_basis current_value proposed_value'.split(' '));
+  const matrixMigration = { matrix_type: 'regular', current_matrix_type: 'regular', proposed_matrix_type: '', proposed_matrix_type_defaults_current: true };
+  const optionalTaxFields = new Set('tax_category tax_residency tax_period_type tax_payment_scope tax_program current_tax_month proposed_tax_month tax_regime'.split(' '));
   const enums = {
+    tax_category: ['permanent', 'temporary_monthly', 'non_employee', 'unsupported'],
+    tax_residency: ['domestic', 'foreign'],
+    tax_period_type: ['ordinary', 'final'],
+    tax_payment_scope: ['monthly', 'single', 'other'],
+    tax_program: ['kesehatan', 'jkk', 'jkm', 'jht', 'jp', 'other'],
+    tax_regime: ['ordinary', 'special'],
     ...C.paymentPolicies,
     scenario: ['current', 'proposed'],
     direction: ['earning', 'employee_deduction', 'employer_contribution'],
@@ -33,7 +41,7 @@
         tax_basis: ['taxable', 'gross', 'basic']
   };
   const required = {
-    workspace: [], matrix: ['matrix_id', 'name', 'scenario'],
+    workspace: [], matrix: ['matrix_id', 'name', 'scenario', 'matrix_type'],
     matrix_entry: ['matrix_id', 'scenario', 'salary_group', 'professional_category', 'kmk_level', 'golongan', 'basic_salary'],
     employee: ['employee_id', 'name'],
     component_definition: ['code', 'name', 'direction', 'calculation_type'],
@@ -122,6 +130,9 @@
       if (blank(raw)) {
         if (required[type].includes(field) || booleanFields.has(field) || (numberFields.has(field) && !nullableFields.has(field) && field !== 'pph_rate' && !(field === 'default_value' && source.calculation_type === 'manual'))) fail(`${type}.${field} is required.`);
         record[field] = '';
+      } else if (['matrix_type', 'current_matrix_type', 'proposed_matrix_type'].includes(field)) {
+        record[field] = field !== 'matrix_type' && typeof raw === 'string' && !raw.trim() ? '' : C.normalizeMatrixType(raw);
+        if (record[field] === null) fail(`Invalid ${field}: ${raw}.`);
       } else if (booleanFields.has(field)) {
         const text = String(raw).trim().toLowerCase();
         if (!['true', 'false'].includes(text)) fail(`${field} must be true or false.`);
@@ -149,6 +160,7 @@
           if (!parsed) fail(`Invalid ${field}: ${raw}.`);
           record[field] = `${parsed.salary_group}-${parsed.professional_category}${parsed.kmk_level}`;
         }
+        if (['current_tax_month', 'proposed_tax_month'].includes(field) && !/^\d{4}-(0[1-9]|1[0-2])$/.test(record[field])) fail(`Invalid YYYY-MM for ${field}.`);
         if (['join_date', 'effective_date'].includes(field)) {
           const date = record[field];
           if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(Date.parse(date)) || new Date(date).toISOString().slice(0, 10) !== date) fail(`Invalid ISO date for ${field}.`);
@@ -158,10 +170,10 @@
     }
     return record;
   }
-  function identity(type, r) {
+  function identity(type, r, ws) {
     if (type === 'workspace' || type === 'global_rule') return type;
     if (type === 'matrix') return r.matrix_id;
-    if (type === 'matrix_entry') return JSON.stringify([r.scenario, r.golongan]);
+    if (type === 'matrix_entry') return C.matrixEntryKey(ws, r);
     if (type === 'employee') return r.employee_id;
     if (type === 'employee_component') return JSON.stringify([r.employee_id, r.component_code]);
     return r.code;
@@ -179,7 +191,7 @@
       const seen = new Set();
       for (const record of ws[collection]) {
         normalize(type, record, false, ws);
-        const id = identity(type, record);
+        const id = identity(type, record, ws);
         if (seen.has(id)) fail(`Duplicate ${type}: ${id}.`);
         seen.add(id);
       }
@@ -190,8 +202,9 @@
     const matrices = new Map(ws.matrices.map(r => [r.matrix_id, r]));
     const scenarios = new Set();
     for (const matrix of ws.matrices) {
-      if (scenarios.has(matrix.scenario)) fail(`Duplicate matrix scenario: ${matrix.scenario}.`);
-      scenarios.add(matrix.scenario);
+      const key = JSON.stringify([matrix.scenario, C.normalizeMatrixType(matrix.matrix_type)]);
+      if (scenarios.has(key)) fail(`Duplicate matrix scenario/type: ${key}.`);
+      scenarios.add(key);
     }
     for (const entry of ws.matrixEntries) {
       if (!matrices.has(entry.matrix_id) || matrices.get(entry.matrix_id).scenario !== entry.scenario) fail(`Unknown or mismatched matrix reference: ${entry.matrix_id}.`);
@@ -220,7 +233,7 @@
     structural(ws);
     const records = [];
     function append(type, record) {
-      records.push({ schema_version: 1, record_type: type, record_id: identity(type, record), ...(type === 'employee_component' ? normalizeAssignment(record, ws) : normalize(type, record, false, ws)) });
+      records.push({ schema_version: 1, record_type: type, record_id: identity(type, record, ws), ...(type === 'employee_component' ? normalizeAssignment(record, ws) : normalize(type, record, false, ws)) });
     }
     append('workspace', ws.metadata);
     for (const [type, collection] of Object.entries(collections)) ws[collection].forEach(r => append(type, r));
@@ -229,7 +242,7 @@
   }
   function importWorkspace(text) {
     const { headers, records } = table(text);
-    checkHeaders(headers, workspaceHeaders, workspaceHeaders.filter(h => h !== 'generator_settings' && !own(C.paymentPolicies, h)));
+    checkHeaders(headers, workspaceHeaders, workspaceHeaders.filter(h => h !== 'generator_settings' && !own(matrixMigration, h) && !optionalTaxFields.has(h) && !own(C.paymentPolicies, h)));
     const ws = C.createWorkspace();
     for (const collection of Object.values(collections)) ws[collection] = [];
     ws.schemaVersion = 1;
@@ -244,7 +257,7 @@
       seen.add(id);
       for (const h of headers.filter(h => !['schema_version', 'record_type', 'record_id'].includes(h))) if (!fields[type].includes(h) && row[h] !== '') fail(`Column ${h} is not applicable to ${type}.`);
       // Keep original decimal strings until all rules and definitions are available.
-      const record = Object.fromEntries(fields[type].map(field => [field, row[field]]));
+      const record = Object.fromEntries(fields[type].map(field => [field, !headers.includes(field) && own(matrixMigration, field) ? matrixMigration[field] : row[field]]));
       if (collections[type]) ws[collections[type]].push(record);
       else {
         if (singletons.has(type)) fail(`Duplicate ${type} record.`);
@@ -264,7 +277,7 @@
   }
   function exportEmployees(ws) { return stringify(ws.employees.map(r => normalize('employee', r, false, ws)), employeeFields); }
   function employeeDefaults() {
-    return { employee_id: '', name: '', current_golongan: '', unit: '', department: '', position: '', employment_status: '', join_date: '', active: true, proposed_golongan: '', current_basic_override: '', proposed_basic_override: '', ptkp_status: '', bpjs_kesehatan: true, bpjs_ketenagakerjaan: true, pph_method: 'gross_up', pph_rate: 0, pph_fixed_override: '', notes: '' };
+    return { employee_id: '', name: '', current_golongan: '', current_matrix_type: '', proposed_matrix_type: '', unit: '', department: '', position: '', employment_status: '', join_date: '', active: true, proposed_golongan: '', current_basic_override: '', proposed_basic_override: '', ptkp_status: '', tax_category: '', tax_residency: '', tax_period_type: '', tax_payment_scope: '', bpjs_kesehatan: true, bpjs_ketenagakerjaan: true, pph_method: 'gross_up', pph_rate: '', pph_fixed_override: '', notes: '' };
   }
   function preview(ws, operation) {
     const result = { workspace: clone(ws), added: 0, updated: 0, unchanged: 0, rejected: 0, issues: [] };
@@ -273,9 +286,9 @@
     if (result.issues.some(issue => issue.severity === 'error') && result.rejected === 0) result.rejected = 1;
     return result;
   }
-  function rowError(result, index, error) {
+  function rowError(result, index, error, employee) {
     result.rejected++;
-    result.issues.push({ severity: 'error', message: `Row ${index + 2}: ${error.message}` });
+    result.issues.push({ severity: 'error', message: `Row ${index + 2}: ${error.message}`, ...(employee ? { employee_id: employee.employee_id, employee_name: employee.name || '' } : {}) });
   }
   function previewEmployees(text, ws, mode) {
     return preview(ws, result => {
@@ -293,8 +306,10 @@
           incoming.add(id);
           const previous = existing.get(id);
           if (previous && mode === 'add') fail(`Employee ID already exists: ${id}.`);
-          if (previous && own(patch, 'name') && patch.name !== previous.name) result.issues.push({ severity: 'warning', message: `Name differs for employee ${id}: ${previous.name} → ${patch.name}.` });
-          const employee = { ...(mode === 'update' && previous ? previous : employeeDefaults()), ...patch };
+          if (previous && own(patch, 'name') && patch.name !== previous.name) result.issues.push({ severity: 'warning', employee_id: id, employee_name: patch.name || previous.name || '', message: `Name differs for employee ${id}: ${previous.name} → ${patch.name}.` });
+          const defaults = employeeDefaults();
+          if (!headers.includes('current_matrix_type')) defaults.current_matrix_type = 'regular';
+          const employee = { ...(mode === 'update' && previous ? previous : defaults), ...patch };
                     normalize('employee', employee, false, result.workspace);
           if (previous && mode !== 'replace') {
             const changed = employeeFields.some(field => !Object.is(employee[field], previous[field]) && !(blank(employee[field]) && blank(previous[field])));
@@ -308,9 +323,9 @@
               else result.updated++;
             } else result.added++;
           }
-        } catch (error) { rowError(result, index, error); }
+        } catch (error) { rowError(result, index, error, { employee_id: row.employee_id?.trim(), name: own(row, 'name') ? row.name : existing.get(row.employee_id?.trim())?.name }); }
       });
-      if (mode === 'update') for (const id of existing.keys()) if (!incoming.has(id)) result.issues.push({ severity: 'warning', message: `Existing employee ${id} is missing from the update file; retained unchanged.` });
+      if (mode === 'update') for (const id of existing.keys()) if (!incoming.has(id)) result.issues.push({ severity: 'warning', employee_id: id, employee_name: existing.get(id).name || '', message: `Existing employee ${id} is missing from the update file; retained unchanged.` });
       if (mode === 'replace') result.issues.push({ severity: 'warning', message: 'Replacing employees requires explicit confirmation. Referenced employees cannot be removed.' });
     });
   }
@@ -328,24 +343,35 @@
           const code = `${parsed.salary_group}-${parsed.professional_category}${parsed.kmk_level}`;
           const match = /^(\d+)-([A-Z]+)(\d+)$/.exec(code);
           if (!match) fail(`Invalid Golongan: ${code}.`);
-          const key = JSON.stringify([scenario, code]);
+          const matrixType = headers.includes('matrix_type') ? C.normalizeMatrixType(row.matrix_type) : 'regular';
+          if (!matrixType) fail('Invalid or missing matrix_type.');
+          const key = JSON.stringify([scenario, matrixType, code]);
           if (seen.has(key)) fail(`Duplicate matrix entry in import: ${scenario}/${code}.`);
           seen.add(key);
-          let matrix = result.workspace.matrices.find(m => m.scenario === scenario);
-          const matrixId = matrix ? matrix.matrix_id : `matrix-${scenario}`;
-          const old = result.workspace.matrixEntries.find(e => e.scenario === scenario && e.golongan === code);
+          const parents = result.workspace.matrices.filter(m => m.scenario === scenario && C.normalizeMatrixType(m.matrix_type) === matrixType);
+          if (parents.length > 1) fail(`Ambiguous matrix scenario/type: ${scenario}/${matrixType}.`);
+          const matrix = parents[0];
+          let matrixId = matrix ? matrix.matrix_id : `matrix-${scenario}-${matrixType}`;
+          if (!matrix) {
+            const base = matrixId;
+            let suffix = 2;
+            while (result.workspace.matrices.some(m => m.matrix_id === matrixId)) matrixId = base + '-' + suffix++;
+          }
+          const matches = result.workspace.matrixEntries.filter(e => C.matrixEntryKey(result.workspace, e) === key);
+          if (matches.length > 1) fail(`Duplicate matrix entry: ${key}.`);
+          const old = matches[0];
           const entry = normalize('matrix_entry', { matrix_id: matrixId, scenario, salary_group: Number(match[1]), professional_category: match[2], kmk_level: Number(match[3]), golongan: code, basic_salary: row.basic_salary, note: old ? old.note : '', ...Object.fromEntries(['salary_group', 'professional_category', 'kmk_level', 'note'].filter(h => own(row, h) && (h === 'note' || row[h] !== '')).map(h => [h, row[h]])) }, false, result.workspace);
           if (`${entry.salary_group}-${entry.professional_category}${entry.kmk_level}` !== code) fail('Matrix dimensions disagree with Golongan.');
-          const nextMatrix = { ...(matrix || { matrix_id: matrixId, scenario, name: scenario === 'current' ? 'Current matrix' : 'Proposed matrix', effective_date: '' }) };
+          const nextMatrix = { ...(matrix || { matrix_id: matrixId, scenario, matrix_type: matrixType, name: scenario === 'current' ? 'Current matrix' : 'Proposed matrix', effective_date: '' }) };
           for (const [column, field] of [['matrix_name', 'name'], ['effective_date', 'effective_date']]) {
             if (own(row, column)) {
-              const metaKey = `${scenario}/${field}`;
+              const metaKey = `${scenario}/${matrixType}/${field}`;
               if (metadata.has(metaKey) && metadata.get(metaKey) !== row[column]) fail(`Conflicting ${column} for ${scenario}.`);
               nextMatrix[field] = row[column];
             }
           }
           const normalizedMatrix = normalize('matrix', nextMatrix);
-          for (const [column, field] of [['matrix_name', 'name'], ['effective_date', 'effective_date']]) if (own(row, column)) metadata.set(`${scenario}/${field}`, row[column]);
+          for (const [column, field] of [['matrix_name', 'name'], ['effective_date', 'effective_date']]) if (own(row, column)) metadata.set(`${scenario}/${matrixType}/${field}`, row[column]);
           const matrixChanged = matrix && fields.matrix.some(h => normalizedMatrix[h] !== (matrix[h] ?? ''));
           if (matrix) result.workspace.matrices[result.workspace.matrices.indexOf(matrix)] = normalizedMatrix;
           else result.workspace.matrices.push(normalizedMatrix);
@@ -357,12 +383,16 @@
       });
     });
   }
-  function exportMatrix(ws, scenario) {
+  function exportMatrix(ws, scenario, matrixType, matrixId) {
     if (!enums.scenario.includes(scenario)) fail('scenario must be current or proposed.');
-    const records = ws.matrixEntries.filter(e => e.scenario === scenario).map(entry => {
-      const matrix = ws.matrices.find(m => m.matrix_id === entry.matrix_id && m.scenario === scenario);
-      if (!matrix) fail(`Unknown matrix reference: ${entry.matrix_id}.`);
-      return { ...normalize('matrix_entry', entry, false, ws), matrix_name: matrix.name, effective_date: matrix.effective_date };
+    const type = matrixType === undefined ? undefined : C.normalizeMatrixType(matrixType);
+    if (type === null) fail('Invalid matrix_type.');
+    const records = ws.matrixEntries.filter(e => e.scenario === scenario && (matrixId === undefined || e.matrix_id === matrixId)).flatMap(entry => {
+      if (!C.matrixEntryKey(ws, entry)) fail(`Unknown or mismatched matrix reference: ${entry.matrix_id}.`);
+      const matrix = ws.matrices.find(m => m.matrix_id === entry.matrix_id);
+      const resolvedType = C.normalizeMatrixType(matrix.matrix_type);
+      if (type !== undefined && resolvedType !== type) return [];
+      return [{ ...normalize('matrix_entry', entry, false, ws), matrix_type: resolvedType, matrix_name: matrix.name, effective_date: matrix.effective_date }];
     });
     return stringify(records, matrixHeaders);
   }
@@ -371,7 +401,13 @@
     const issues = [...(result.issues || []), ...result.employees.flatMap(e => e.issues || [])];
     if (issues.some(issue => issue.severity === 'error') || result.valid === false) fail('Cannot export results with blocking validation errors.');
     const rows = result.employees.map(employee => {
-      const row = Object.fromEntries(resultHeaders.slice(0, 6).map(h => [h, employee[h]]));
+      const row = Object.fromEntries(resultHeaders.slice(0, 8).map(h => [h, employee[h]]));
+      for (const scenario of enums.scenario) {
+        const field = `${scenario}_matrix_type`;
+        const type = C.normalizeMatrixType(employee[field]);
+        if (type === null) fail(`Invalid or missing result ${field}.`);
+        row[field] = type;
+      }
       for (const metric of ['basic_salary', 'gross', 'employee_bpjs', 'employer_bpjs', 'pph', 'deductions', 'take_home_pay', 'employer_cost']) {
         for (const scenario of enums.scenario) {
           const value = employee[scenario] && employee[scenario][metric];

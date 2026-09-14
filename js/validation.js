@@ -8,7 +8,9 @@
   C.validate = function (ws) {
     const issues = [];
     function issue(severity, message, employee) {
-      issues.push({ severity, message, ...(employee ? { employee_id: employee.employee_id } : {}) });
+      const matches = employee && Array.isArray(ws?.employees) ? ws.employees.filter(e => e && e.employee_id === employee.employee_id) : [];
+      const name = employee?.name ?? (matches.length === 1 ? matches[0].name : '');
+      issues.push({ severity, message, ...(employee ? { employee_id: employee.employee_id, employee_name: name || '' } : {}) });
     }
     const error = (message, employee) => issue('error', message, employee);
     const warning = (message, employee) => issue('warning', message, employee);
@@ -51,18 +53,28 @@
     rounding(rules.tax_rounding, 'tax');
     if (rules.currency !== 'IDR') error('Currency must be IDR');
     if (rules.percentage_precision !== 2) error('Percentage precision must be 2');
-    for (const key of ['include_inactive', 'allow_negative_thp', 'proposed_defaults_current', 'tax_enabled']) boolean(rules[key], key);
+    for (const key of ['include_inactive', 'allow_negative_thp', 'proposed_defaults_current', 'proposed_matrix_type_defaults_current', 'tax_enabled']) boolean(rules[key], key);
     choice(rules.tax_basis, ['taxable', 'gross', 'basic'], 'tax basis');
     for (const [key, options] of Object.entries(C.paymentPolicies)) if (!blank(rules[key])) choice(rules[key], options, key);
     if (!rules.tax_enabled) warning('Estimasi PPh 21 is disabled; results exclude tax');
+    if (rules.tax_enabled) {
+      choice(rules.tax_regime, ['ordinary'], 'rezim pajak biasa (insentif/DTP belum didukung)');
+      for (const scenario of ['current', 'proposed']) if (!/^202[4-6]-(0[1-9]|1[0-2])$/.test(rules[scenario + '_tax_month'] || '')) error('Isi masa pajak ' + scenario + ' YYYY-MM (cakupan terverifikasi 2024–2026).');
+
+      warning('PPh otomatis: bulan biasa, subjek dalam negeri. Pembulatan pajak ke bawah ke rupiah penuh adalah asumsi simulasi; lihat TAX_RULES.md.');
+    }
     unique(ws.employees, employee => employee.employee_id, 'employee ID', true);
     unique(ws.matrices, matrix => matrix.matrix_id, 'matrix ID');
-    unique(ws.matrixEntries, entry => entry.scenario + ':' + entry.golongan, 'matrix entry');
+    unique(ws.matrices, matrix => JSON.stringify([matrix.scenario, C.normalizeMatrixType(matrix.matrix_type)]), 'matrix scenario/type');
+    unique(ws.matrixEntries, entry => C.matrixEntryKey(ws, entry), 'matrix entry');
     unique(ws.componentDefinitions, definition => definition.code, 'component code');
     unique(ws.bpjsRules, rule => rule.code, 'BPJS code');
     unique(ws.employeeComponents, assignment => JSON.stringify([assignment.employee_id, assignment.component_code]), 'employee component assignment');
     const matrices = new Map(ws.matrices.map(matrix => [matrix.matrix_id, matrix]));
-    for (const matrix of ws.matrices) choice(matrix.scenario, ['current', 'proposed'], 'matrix scenario');
+    for (const matrix of ws.matrices) {
+      choice(matrix.scenario, ['current', 'proposed'], 'matrix scenario');
+      if (!C.normalizeMatrixType(matrix.matrix_type)) error('Invalid or missing matrix_type: ' + matrix.matrix_id);
+    }
     for (const entry of ws.matrixEntries) {
       choice(entry.scenario, ['current', 'proposed'], 'matrix entry scenario');
       if (!C.parseGolongan(entry.golongan)) error('Invalid matrix Golongan: ' + entry.golongan);
@@ -85,6 +97,7 @@
       const definition = definitions.get(assignment.component_code);
       if (!employee) error('Unknown employee reference: ' + assignment.employee_id);
       if (!definition) error('Unknown referenced component: ' + assignment.component_code, employee);
+      if (rules.tax_enabled && employee && (employee.active || rules.include_inactive) && definition && enabled(definition.active) && definition.direction === 'employer_contribution' && (enabled(definition.applies_current) || enabled(definition.applies_proposed))) error('Kontribusi perusahaan non-BPJS memerlukan klasifikasi pajak khusus; belum didukung saat PPh aktif.', employee);
       for (const scenario of ['current', 'proposed']) {
         const value = assignment[scenario + '_value'];
         numeric(value, scenario + ' component value', employee, true);
@@ -93,6 +106,7 @@
       }
     }
     for (const rule of ws.bpjsRules) {
+      if (rule.active && C.bpjsParticipation(rule) === null) error('Identifikasi jenis program BPJS aktif: ' + rule.code + ' (tax_program: kesehatan, jkk, jkm, jht, atau jp), termasuk saat PPh nonaktif.');
       for (const key of ['employee_rate', 'employer_rate']) numeric(rule[key], rule.code + '.' + key, null, false, true);
       for (const key of ['minimum_basis', 'maximum_basis']) numeric(rule[key], rule.code + '.' + key, null, true, true, true);
       if (!blank(rule.minimum_basis) && !blank(rule.maximum_basis) && Number(rule.minimum_basis) > Number(rule.maximum_basis)) error('BPJS minimum basis exceeds maximum: ' + rule.code);
@@ -105,21 +119,26 @@
       if (!employee.active && !rules.include_inactive) continue;
       if (blank(employee.name) || !String(employee.name).trim()) error('Missing employee name', employee);
       if (!employee.current_golongan) error('Missing current Golongan', employee);
+      if (!C.normalizeMatrixType(employee.current_matrix_type)) error('Invalid or missing current_matrix_type', employee);
       for (const key of ['bpjs_kesehatan', 'bpjs_ketenagakerjaan']) {
         boolean(employee[key], key, employee);
         if (!employee[key]) warning('Employee excluded from ' + key, employee);
       }
-      if (blank(employee.ptkp_status)) warning('PTKP status is blank', employee);
-      choice(employee.pph_method, ['gross', 'net', 'gross_up'], 'PPh method', employee);
-      numeric(employee.pph_rate, 'PPh rate', employee, !rules.tax_enabled || !blank(employee.pph_fixed_override), true);
-      numeric(employee.pph_fixed_override, 'PPh fixed override', employee, true, true, true);
+      if (rules.tax_enabled) {
+        choice(employee.tax_category, ['permanent', 'temporary_monthly', 'non_employee'], 'klasifikasi PPh (harian/mingguan/lainnya belum didukung)', employee);
+        choice(employee.tax_residency, ['domestic'], 'subjek pajak dalam negeri', employee);
+        choice(employee.tax_period_type, ['ordinary'], 'masa biasa, bukan masa pajak terakhir', employee);
+        choice(employee.tax_payment_scope, employee.tax_category === 'non_employee' ? ['single'] : ['monthly'], 'pola pembayaran pajak', employee);
+        if (employee.tax_category !== 'non_employee') choice(employee.ptkp_status, ['TK/0', 'TK/1', 'TK/2', 'TK/3', 'K/0', 'K/1', 'K/2', 'K/3'], 'status PTKP', employee);
+        if (!blank(employee.pph_rate) || !blank(employee.pph_fixed_override)) warning('Tarif/override PPh lama diabaikan; PPh dihitung otomatis.', employee);
+      }
       for (const scenario of ['current', 'proposed']) {
         const policy = C.paymentPolicy(rules, scenario, 'pph');
         if (rules.tax_enabled && policy === 'unconfirmed') error('Pilih skema PPh ' + scenario + ' pada aturan perhitungan.', employee);
-        if (rules.tax_enabled && policy !== 'unconfirmed' && employee.pph_method !== policy) warning('Metode PPh karyawan lama diabaikan; mengikuti skema ' + scenario + ': ' + policy + '.', employee);
-        if (rules.tax_enabled && policy === 'gross_up' && blank(employee.pph_fixed_override) && Number(employee.pph_rate) >= 1) error('Tarif PPh gross-up harus >= 0% dan < 100%.', employee);
+        if (rules.tax_enabled && policy === 'net') error('Skema net di luar bruto tidak didukung PPh otomatis; pilih gross-up untuk pajak ditanggung perusahaan.', employee);
+        if (rules.tax_enabled && employee.tax_category === 'permanent' && String(rules[scenario + '_tax_month']).endsWith('-12')) error('Desember pegawai tetap membutuhkan rekonsiliasi tahunan; di luar simulasi bulan biasa.', employee);
         for (const kind of ['bpjs_kesehatan', 'bpjs_ketenagakerjaan']) {
-          if (C.paymentPolicy(rules, scenario, kind) === 'unconfirmed' && employee[kind] && ws.bpjsRules.some(r => r.active && r.employee_enabled && (/kesehatan/i.test(r.code) ? 'bpjs_kesehatan' : 'bpjs_ketenagakerjaan') === kind)) error('Pilih skema ' + kind + ' ' + scenario + ' pada aturan perhitungan.', employee);
+          if (C.paymentPolicy(rules, scenario, kind) === 'unconfirmed' && employee[kind] && ws.bpjsRules.some(r => r.active && r.employee_enabled && C.bpjsParticipation(r) === kind)) error('Pilih skema ' + kind + ' ' + scenario + ' pada aturan perhitungan.', employee);
         }
       }
       const resolved = {};
@@ -130,7 +149,17 @@
         numeric(override, scenario + ' basic salary override', employee, true, true, true);
         resolved[scenario] = C.resolveBasic(ws, employee, scenario);
         if (resolved[scenario] === null) error('Unresolved ' + scenario + ' basic salary', employee);
-        if (!blank(override)) warning(scenario + ' basic salary override is disabled and ignored; salary follows matrix', employee);
+        const type = C.resolveMatrixType(ws, employee, scenario);
+        if (!type || ws.matrices.filter(matrix => matrix.scenario === scenario && C.normalizeMatrixType(matrix.matrix_type) === type).length !== 1) error('Unresolved ' + scenario + ' matrix type', employee);
+        if (!blank(override)) {
+          warning(scenario + ' basic salary override exists and is used', employee);
+          const entry = C.matrixSalary(ws, employee, scenario);
+          if (entry) {
+            try {
+              if (resolved[scenario] !== C.roundMoney(entry.basic_salary, rules.rounding)) warning(scenario + ' basic salary override differs from matrix', employee);
+            } catch (_) { /* Invalid matrix salary is reported above. */ }
+          }
+        }
       }
       if (resolved.current !== null && resolved.proposed !== null && resolved.proposed < resolved.current) warning('Proposed basic salary is lower than current', employee);
       const current = C.parseGolongan(employee.current_golongan);

@@ -1,0 +1,4 @@
+# Local XLSX builder and Python regressions only; no browser runtime dependencies.
+# Python 3.10+ development baseline; Node.js 20+ for the builder/test subprocesses.
+# load_workbook(data_only/read_only), iter_rows, and column_index_from_string.
+openpyxl>=3.1.5,<3.2

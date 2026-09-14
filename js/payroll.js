@@ -3,6 +3,7 @@
   const C = globalThis.Caroll = globalThis.Caroll || {};
   if (typeof module !== 'undefined' && module.exports) {
     require('./matrix.js');
+    require('./tax.js');
     require('./validation.js');
   }
   const blank = value => value === '' || value === null || value === undefined;
@@ -22,9 +23,10 @@
     const rules = ws.globalRules;
     const taxPolicy = C.paymentPolicy(rules, scenario, 'pph');
     const breakdown = result.breakdown;
+    result.matrix_type = C.resolveMatrixType(ws, employee, scenario);
     result.basic_salary = C.resolveBasic(ws, employee, scenario);
     breakdown.push({ code: 'basic_salary', name: 'Basic salary', direction: 'earning', amount: result.basic_salary,
-      source: 'matrix' });
+      source: blank(employee[scenario + '_basic_override']) ? 'matrix' : 'override', matrix_type: result.matrix_type });
     const definitions = new Map(ws.componentDefinitions.map(definition => [definition.code, definition]));
     const components = ws.employeeComponents.filter(assignment => assignment.employee_id === employee.employee_id)
       .map(assignment => ({ assignment, definition: definitions.get(assignment.component_code) }))
@@ -52,11 +54,11 @@
     const earnings = calculated.filter(row => row.direction === 'earning');
     result.gross = sum([result.basic_salary, ...earnings.map(row => row.amount)]);
     result.employer_contributions = sum(calculated.filter(row => row.direction === 'employer_contribution').map(row => row.amount));
-    const employeeContributions = [], employerContributions = [], fundedContributions = [];
+    const employeeContributions = [], employerContributions = [], fundedContributions = [], taxableEmployerContributions = [];
     for (const rule of [...ws.bpjsRules].sort((a, b) => a.code < b.code ? -1 : a.code > b.code ? 1 : 0)) {
       if (!rule.active) continue;
-      const health = /kesehatan/i.test(rule.code);
-      const participation = health ? 'bpjs_kesehatan' : 'bpjs_ketenagakerjaan';
+      const participation = C.bpjsParticipation(rule);
+      if (participation === null) continue; // Unidentified active programs are blocked by validation.
       if (!employee[participation]) continue;
       const rawBasis = rule.basis === 'basic' ? result.basic_salary : rule.basis === 'gross' ? result.gross :
         sum([result.basic_salary, ...earnings.filter(row => row.definition[participation]).map(row => row.amount)]);
@@ -70,6 +72,7 @@
       fundedContributions.push(allowance);
       employeeContributions.push(employeeAmount);
       employerContributions.push(employerAmount);
+      if (['kesehatan', 'jkk', 'jkm'].includes(rule.tax_program)) taxableEmployerContributions.push(employerAmount);
       breakdown.push({ code: rule.code, name: rule.name, calculation_type: 'bpjs', raw_basis: rawBasis, basis,
         employee_rate: Number(rule.employee_rate), employer_rate: Number(rule.employer_rate),
         employee_amount: employeeAmount, employer_amount: employerAmount, policy, bpjs_allowance: allowance });
@@ -81,17 +84,17 @@
     result.gross = sum([result.gross, result.bpjs_allowance]);
     breakdown.push({ code: 'bpjs_allowance', name: 'Tunjangan BPJS porsi karyawan', direction: 'earning', amount: result.bpjs_allowance, source: 'company_paid_bpjs' });
     if (rules.tax_enabled) {
-      const basis = rules.tax_basis === 'basic' ? result.basic_salary : rules.tax_basis === 'gross' ? result.gross :
-        sum([result.basic_salary, result.bpjs_allowance, ...earnings.filter(row => row.definition.taxable).map(row => row.amount)]);
-      const manual = !blank(employee.pph_fixed_override);
-      result.pph = manual ? C.roundMoney(employee.pph_fixed_override, rules.tax_rounding) : (taxPolicy === 'gross_up' ? C.grossUpTax : C.percent)(basis, employee.pph_rate, rules.tax_rounding);
-      result.tax_allowance = taxPolicy === 'gross_up' ? result.pph : 0;
+      const basis = sum([result.basic_salary, result.bpjs_allowance, ...earnings.filter(row => row.definition.taxable).map(row => row.amount), ...taxableEmployerContributions]);
+      const input = { gross: basis, category: employee.tax_category, ptkp: employee.ptkp_status };
+      const tax = taxPolicy === 'gross_up' ? C.tax.grossUp(input) : C.tax.calculate(input);
+      result.pph = tax.amount;
+      result.tax_allowance = taxPolicy === 'gross_up' ? tax.allowance : 0;
       result.employer_tax_cost = taxPolicy === 'net' ? result.pph : 0;
       result.gross = sum([result.gross, result.tax_allowance]);
       breakdown.push({ code: 'tax_allowance', name: 'Tunjangan PPh 21 (gross-up)', direction: 'earning', amount: result.tax_allowance, source: 'gross_up' });
       breakdown.push({ code: 'pph', name: 'Estimasi PPh 21', calculation_type: 'tax', method: taxPolicy,
-        basis: sum([basis, result.tax_allowance]), basis_before_allowance: basis, rate: blank(employee.pph_rate) ? null : Number(employee.pph_rate), amount: result.pph,
-        source: manual ? 'manual_override' : taxPolicy === 'gross_up' ? 'gross_up' : 'percentage', employee_amount: taxPolicy === 'net' ? 0 : result.pph,
+        basis: sum([basis, result.tax_allowance]), basis_before_allowance: basis, rate: tax.rate, amount: result.pph, tax_formula: tax.method, ter_category: tax.category, taxable_employer_bpjs: sum(taxableEmployerContributions), tax_month: rules[scenario + '_tax_month'],
+        source: 'automatic_pph21', employee_amount: taxPolicy === 'net' ? 0 : result.pph,
         employer_tax_cost: result.employer_tax_cost, tax_allowance: result.tax_allowance });
     }
     result.deductions = sum([result.employee_bpjs, taxPolicy === 'net' ? 0 : result.pph,
@@ -110,19 +113,20 @@
       try {
         const current = scenarioPayroll(ws, employee, 'current');
         const proposed = scenarioPayroll(ws, employee, 'proposed');
-        if (proposed.take_home_pay < current.take_home_pay) issues.push({ severity: 'warning', message: 'Proposed take-home pay is lower than current', employee_id: employee.employee_id });
+        if (proposed.take_home_pay < current.take_home_pay) issues.push({ severity: 'warning', message: 'Proposed take-home pay is lower than current', employee_id: employee.employee_id, employee_name: employee.name });
         for (const scenario of ['current', 'proposed']) {
           if ((scenario === 'current' ? current : proposed).take_home_pay < 0) issues.push({
             severity: ws.globalRules.allow_negative_thp ? 'warning' : 'error',
-            message: 'Negative take-home pay (' + scenario + ')', employee_id: employee.employee_id
+            message: 'Negative take-home pay (' + scenario + ')', employee_id: employee.employee_id, employee_name: employee.name
           });
         }
         employees.push({ employee_id: employee.employee_id, name: employee.name, unit: employee.unit || '', department: employee.department || '',
+          current_matrix_type: current.matrix_type, proposed_matrix_type: proposed.matrix_type,
           current_golongan: employee.current_golongan,
           proposed_golongan: employee.proposed_golongan || (ws.globalRules.proposed_defaults_current ? employee.current_golongan : ''),
           current, proposed, changes: changes(current, proposed), issues: [] });
       } catch (error) {
-        issues.push({ severity: 'error', message: 'Calculation failed: ' + error.message, employee_id: employee.employee_id });
+        issues.push({ severity: 'error', message: 'Calculation failed: ' + error.message, employee_id: employee.employee_id, employee_name: employee.name });
       }
     }
     if (issues.some(issue => issue.severity === 'error')) return blocked();

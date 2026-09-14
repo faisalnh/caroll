@@ -4,6 +4,11 @@
 
   C.paymentPolicies = Object.fromEntries(['current', 'proposed'].flatMap(scenario => ['pph', 'bpjs_kesehatan', 'bpjs_ketenagakerjaan'].map(kind => [scenario + '_' + kind + '_policy', kind === 'pph' ? ['unconfirmed', 'gross', 'net', 'gross_up'] : ['unconfirmed', 'employee', 'company']])));
   C.paymentPolicy = (rules, scenario, kind) => rules[scenario + '_' + kind + '_policy'] || (kind === 'pph' ? 'gross_up' : 'company');
+  C.bpjsParticipation = rule => {
+    if (rule.tax_program === 'kesehatan') return 'bpjs_kesehatan';
+    if (['jkk', 'jkm', 'jht', 'jp'].includes(rule.tax_program)) return 'bpjs_ketenagakerjaan';
+    return null;
+  };
   C.createWorkspace = function () {
     return {
       schemaVersion: 1,
@@ -13,11 +18,12 @@
       globalRules: {
         currency: 'IDR', rounding: 1, percentage_precision: 2,
         include_inactive: false, allow_negative_thp: false,
-        proposed_defaults_current: true, tax_enabled: false,
+        proposed_defaults_current: true, proposed_matrix_type_defaults_current: true, tax_enabled: false,
         tax_basis: 'taxable', tax_rounding: 1,
-                current_pph_policy: 'unconfirmed', proposed_pph_policy: 'gross_up',
-                current_bpjs_kesehatan_policy: 'unconfirmed', proposed_bpjs_kesehatan_policy: 'company',
-                current_bpjs_ketenagakerjaan_policy: 'employee', proposed_bpjs_ketenagakerjaan_policy: 'company'
+        current_tax_month: '', proposed_tax_month: '', tax_regime: '',
+        current_pph_policy: 'unconfirmed', proposed_pph_policy: 'gross_up',
+        current_bpjs_kesehatan_policy: 'unconfirmed', proposed_bpjs_kesehatan_policy: 'company',
+        current_bpjs_ketenagakerjaan_policy: 'employee', proposed_bpjs_ketenagakerjaan_policy: 'company'
       }
     };
   };
@@ -25,9 +31,10 @@
   C.sampleWorkspace = function () {
     const ws = C.createWorkspace();
     Object.keys(C.paymentPolicies).forEach(key => { ws.globalRules[key] = key.includes('_pph_') ? 'gross_up' : 'company'; });
+    Object.assign(ws.globalRules, { current_tax_month: '2026-08', proposed_tax_month: '2026-08', tax_regime: 'ordinary' });
     ws.metadata = { name: 'Fictional demo — review all rates', current_period: '2026', proposed_period: '2027' };
     ws.matrices = ['current', 'proposed'].map(scenario => ({
-      matrix_id: 'demo-' + scenario, name: 'Demo ' + scenario, scenario,
+      matrix_id: 'demo-' + scenario, name: 'Demo ' + scenario, scenario, matrix_type: 'regular',
       effective_date: scenario === 'current' ? '2026-01-01' : '2027-01-01'
     }));
     ws.matrixEntries = ['current', 'proposed'].flatMap(scenario => [
@@ -41,7 +48,8 @@
       unit: 'Demo Unit', department: index ? 'Teaching' : 'Administration', position: 'Demo role',
       employment_status: 'Demo', join_date: '', active: true,
       current_golongan: index ? '2-PM2' : '1-U1', proposed_golongan: '',
-      current_basic_override: '', proposed_basic_override: '', ptkp_status: 'DEMO',
+      current_matrix_type: 'regular', proposed_matrix_type: '',
+      current_basic_override: '', proposed_basic_override: '', ptkp_status: 'TK/0', tax_category: 'permanent', tax_residency: 'domestic', tax_period_type: 'ordinary', tax_payment_scope: 'monthly',
       bpjs_kesehatan: true, bpjs_ketenagakerjaan: true, pph_method: 'gross_up',
       pph_rate: '0.025', pph_fixed_override: '', notes: 'Fictional person; rates are not legal guidance'
     }));
@@ -55,7 +63,7 @@
       employee_id: employee.employee_id, component_code: 'DEMO_ALLOWANCE', current_value: '', proposed_value: ''
     }));
     ws.bpjsRules = [{
-      code: 'kesehatan', name: 'Demo Kesehatan — NOT legal rates', employee_rate: '0.007',
+      code: 'kesehatan', tax_program: 'kesehatan', name: 'Demo Kesehatan — NOT legal rates', employee_rate: '0.007',
       employer_rate: '0.013', minimum_basis: '', maximum_basis: 5000000, basis: 'selected',
       employee_enabled: true, employer_enabled: true, rounding: 1, active: true
     }];

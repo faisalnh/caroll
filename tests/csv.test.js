@@ -3,6 +3,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 require('../js/state.js');
 require('../js/matrix.js');
+require('../js/tax.js');
 require('../js/validation.js');
 require('../js/csv.js');
 require('../js/payroll.js');
@@ -84,7 +85,7 @@ test('unfinished drafts reload while payroll readiness and structural integrity 
   const issues = C.validate(imported).filter(issue => issue.severity === 'error');
   assert.ok(issues.some(issue => /Unresolved proposed basic salary/.test(issue.message)));
   assert.ok(issues.some(issue => /Manual component requires a value/.test(issue.message)));
-  assert.ok(issues.some(issue => /PPh rate/.test(issue.message)));
+  assert.equal(imported.employees[0].pph_rate, '');
   const payroll = C.calculatePayroll(imported);
     assert.deepEqual(payroll.employees, []);
     assert.equal(payroll.totals, null);
@@ -163,7 +164,7 @@ test('employee and matrix previews apply global and tax rounding without an inte
   assert.deepEqual(ws, before);
 });
 
-test('legacy salary overrides survive CSV round-trip but cannot replace matrix salaries', () => {
+test('explicit salary overrides survive CSV round-trip and replace matrix salaries', () => {
   const ws = sample();
   const preview = csv.previewEmployees('employee_id,current_basic_override,proposed_basic_override\nDEMO-001,0,9999999', ws, 'update');
   assert.equal(preview.rejected, 0);
@@ -171,10 +172,10 @@ test('legacy salary overrides survive CSV round-trip but cannot replace matrix s
   const employee = restored.employees[0];
   assert.equal(employee.current_basic_override, 0);
   assert.equal(employee.proposed_basic_override, 9999999);
-  assert.equal(C.resolveBasic(restored, employee, 'current'), 4000000);
-  assert.equal(C.resolveBasic(restored, employee, 'proposed'), 4200000);
-  assert.equal(C.calculatePayroll(restored).employees[0].proposed.breakdown[0].source, 'matrix');
-  assert.ok(preview.issues.some(i => /override is disabled and ignored/.test(i.message)));
+  assert.equal(C.resolveBasic(restored, employee, 'current'), 0);
+  assert.equal(C.resolveBasic(restored, employee, 'proposed'), 9999999);
+  assert.equal(C.calculatePayroll(restored).employees[0].proposed.breakdown[0].source, 'override');
+  assert.ok(preview.issues.some(i => /override exists/.test(i.message)));
   restored.matrixEntries = [];
   assert.equal(C.calculatePayroll(restored).totals, null);
 });
@@ -263,7 +264,7 @@ test('matrix preview rejects malformed, duplicate and inconsistent metadata/dime
   }
   const p = csv.previewMatrix('scenario,golongan,basic_salary\ncurrent,1-U1,10', C.createWorkspace());
   assert.equal(p.rejected, 0, JSON.stringify(p.issues));
-  assert.equal(p.workspace.matrices[0].matrix_id, 'matrix-current');
+  assert.equal(p.workspace.matrices[0].matrix_id, 'matrix-current-regular');
 });
 
 test('component money rounds exactly while percentage overrides remain fractional', () => {
@@ -291,15 +292,68 @@ test('component money rounds exactly while percentage overrides remain fractiona
 test('result export flattens core schema, preserves undefined percentages, and blocks errors', () => {
   const values = { basic_salary: 100, gross: 200, employee_bpjs: 1, employer_bpjs: 2, pph: 3, deductions: 4, take_home_pay: 192, employer_cost: 202 };
   const changes = Object.fromEntries(['basic_salary', 'gross', 'take_home_pay', 'employer_cost'].map(k => [k, { amount: 0, percent: null }]));
-  const employee = { employee_id: '001', name: 'A, B', unit: 'U', department: 'D', current_golongan: '1-U1', proposed_golongan: '1-U1', current: values, proposed: values, changes, issues: [{ severity: 'warning', message: 'Review' }] };
+  const employee = { employee_id: '001', name: 'A, B', unit: 'U', department: 'D', current_golongan: '1-U1', proposed_golongan: '1-U1', current_matrix_type: 'regular', proposed_matrix_type: 'contract_2-x', current: values, proposed: values, changes, issues: [{ severity: 'warning', message: 'Review' }] };
   const result = { employees: [employee], issues: [] };
   const [row] = csv.parse(csv.exportResults(result));
+  assert.equal(row.current_matrix_type, 'regular');
+  assert.equal(row.proposed_matrix_type, 'contract_2-x');
   assert.equal(row.current_basic_salary, '100');
   assert.equal(row.basic_change_percent, '');
   assert.equal(row.validation_status, 'warning');
   assert.equal(row.employee_id, '001');
   assert.equal(csv.parse(csv.exportResults({ employees: [], issues: [] })).length, 0);
+  for (const field of ['current_matrix_type', 'proposed_matrix_type']) {
+    const missing = { ...employee };
+    delete missing[field];
+    assert.throws(() => csv.exportResults({ employees: [missing] }), new RegExp(field));
+    for (const value of [undefined, null, '', '   ', 'invalid type', 'regular!', 123, {}, []]) {
+      assert.throws(() => csv.exportResults({ employees: [{ ...employee, [field]: value }] }), new RegExp(field));
+    }
+    const [normalized] = csv.parse(csv.exportResults({ employees: [{ ...employee, [field]: ' CONTRACT_2-X ' }] }));
+    assert.equal(normalized[field], 'contract_2-x');
+  }
   result.issues.push({ severity: 'error', message: 'blocked' });
   assert.throws(() => csv.exportResults(result));
   assert.throws(() => csv.exportResults({ employees: [{ ...employee, current: {} }] }));
+});
+
+const taxFields = ['tax_category', 'tax_residency', 'tax_period_type', 'tax_payment_scope', 'tax_program', 'current_tax_month', 'proposed_tax_month', 'tax_regime'];
+test('legacy workspace missing automatic tax columns loads blanks without inference', () => {
+  const rows = csv.parse(csv.exportWorkspace(sample()));
+  for (const row of rows) for (const key of taxFields) delete row[key];
+  const restored = csv.importWorkspace(csv.stringify(rows));
+  for (const e of restored.employees) for (const key of taxFields.slice(0, 4)) assert.equal(e[key], '');
+  for (const r of restored.bpjsRules) assert.equal(r.tax_program, '');
+  for (const key of taxFields.slice(5)) assert.equal(restored.globalRules[key], '');
+  assert.equal(csv.exportWorkspace(csv.importWorkspace(csv.exportWorkspace(restored))), csv.exportWorkspace(restored));
+});
+
+test('automatic tax enums and month syntax round-trip and reject invalid nonblank values', () => {
+  const ws = sample();
+  Object.assign(ws.employees[0], { tax_category: 'permanent', tax_residency: 'domestic', tax_period_type: 'ordinary', tax_payment_scope: 'monthly' });
+  Object.assign(ws.globalRules, { current_tax_month: '2024-01', proposed_tax_month: '2026-11', tax_regime: 'ordinary' });
+  ws.bpjsRules[0].tax_program = 'kesehatan';
+  const restored = csv.importWorkspace(csv.exportWorkspace(ws));
+  for (const key of taxFields.slice(0, 4)) assert.equal(restored.employees[0][key], ws.employees[0][key]);
+  assert.equal(restored.globalRules.current_tax_month, '2024-01');
+  assert.equal(restored.bpjsRules[0].tax_program, 'kesehatan');
+  for (const key of taxFields) assert.throws(() => csv.importWorkspace(mutateExport(ws, rows => {
+    rows.find(r => r.record_type === (key === 'tax_program' ? 'bpjs_rule' : taxFields.slice(0, 4).includes(key) ? 'employee' : 'global_rule'))[key] = 'invalid';
+  })), new RegExp(key));
+  for (const month of ['2026-00', '2026-13', '2026-1', '2026-01-01']) assert.throws(() => csv.importWorkspace(mutateExport(ws, rows => { rows.find(r => r.record_type === 'global_rule').current_tax_month = month; })), /YYYY-MM/);
+});
+
+test('partial employee updates preserve tax classifications and archival manual data', () => {
+  const ws = sample();
+  ws.globalRules.tax_enabled = false;
+  Object.assign(ws.employees[0], { tax_category: 'permanent', tax_residency: 'domestic', tax_period_type: 'ordinary', tax_payment_scope: 'monthly', pph_rate: 0.99, pph_fixed_override: 123456, ptkp_status: 'INVALID LEGACY' });
+  const p = csv.previewEmployees('employee_id,notes\nDEMO-001,updated', ws, 'update');
+  assert.equal(p.rejected, 0, JSON.stringify(p.issues));
+  for (const key of [...taxFields.slice(0, 4), 'pph_rate', 'pph_fixed_override', 'ptkp_status']) assert.equal(p.workspace.employees[0][key], ws.employees[0][key]);
+  const restored = csv.importWorkspace(csv.exportWorkspace(p.workspace));
+  assert.equal(restored.employees[0].pph_fixed_override, 123456);
+  assert.equal(C.calculatePayroll(restored).employees[0].current.pph, 0);
+  const cleared = csv.previewEmployees('employee_id,tax_category\nDEMO-001,', ws, 'update');
+  assert.equal(cleared.workspace.employees[0].tax_category, '');
+  assert.equal(cleared.workspace.employees[0].tax_residency, 'domestic');
 });

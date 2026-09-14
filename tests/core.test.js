@@ -7,6 +7,7 @@ const path = require('node:path');
 const C = require('../js/state.js');
 require('../js/matrix.js');
 require('../js/validation.js');
+require('../js/tax.js');
 require('../js/payroll.js');
 
 function workspace(current = 10000, proposed = 12000) {
@@ -30,7 +31,7 @@ function component(ws, code, direction, calculation_type, value, extra = {}, ass
 function bpjs(ws, extra = {}) {
   ws.bpjsRules.push({ code: 'kesehatan', name: 'Demo', employee_rate: '0.01', employer_rate: '0.02',
     minimum_basis: '', maximum_basis: '', basis: 'basic', employee_enabled: true,
-    employer_enabled: true, rounding: 1, active: true, ...extra });
+    employer_enabled: true, rounding: 1, active: true, tax_program: (extra.code || 'kesehatan').toLowerCase(), ...extra });
 }
 function result(ws) {
   const output = C.calculatePayroll(ws);
@@ -46,7 +47,7 @@ function blocked(ws, pattern) {
 
 test('classic scripts share a browser global without require or DOM', () => {
   const context = vm.createContext({});
-  for (const file of ['state', 'matrix', 'payroll', 'validation']) {
+  for (const file of ['state', 'matrix', 'tax', 'payroll', 'validation']) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, '../js/' + file + '.js'), 'utf8'), context);
   }
   assert.equal(vm.runInContext('Caroll.calculatePayroll(Caroll.sampleWorkspace()).employees.length', context), 2);
@@ -80,22 +81,23 @@ test('Golongan generation and parsing', () => {
   assert.deepEqual(C.parseGolongan('3-PM8'), { salary_group: '3', professional_category: 'PM', kmk_level: 8 });
   for (const code of ['', '3PM8', '3-PM0', '0-PM1']) assert.equal(C.parseGolongan(code), null);
 });
-test('matrix resolution ignores overrides and proposed fallback only uses current code', () => {
+test('matrix resolution prioritizes overrides and proposed fallback only uses current code', () => {
   const ws = workspace();
   const employee = ws.employees[0];
   assert.equal(C.resolveBasic(ws, employee, 'current'), 10000);
   assert.equal(C.resolveBasic(ws, employee, 'proposed'), 12000);
   employee.current_basic_override = 0;
   employee.proposed_basic_override = 13000;
-  assert.equal(C.resolveBasic(ws, employee, 'current'), 10000);
-  assert.equal(C.resolveBasic(ws, employee, 'proposed'), 12000);
+  assert.equal(C.resolveBasic(ws, employee, 'current'), 0);
+  assert.equal(C.resolveBasic(ws, employee, 'proposed'), 13000);
+  employee.proposed_basic_override = '';
   ws.globalRules.proposed_defaults_current = false;
   assert.equal(C.resolveBasic(ws, employee, 'proposed'), null);
   ws.globalRules.proposed_defaults_current = true;
   ws.matrixEntries.pop();
   assert.equal(C.resolveBasic(ws, employee, 'proposed'), null);
 });
-test('legacy overrides never affect payroll, salary sources, or matrix requirements', () => {
+test('explicit overrides affect payroll while duplicate entries still block', () => {
   const ws = workspace();
   component(ws, 'BASIC', 'earning', 'percentage_basic', '0.1');
   bpjs(ws);
@@ -104,16 +106,20 @@ test('legacy overrides never affect payroll, salary sources, or matrix requireme
   ws.employees[0].current_basic_override = 0;
   ws.employees[0].proposed_basic_override = 999999;
   const output = result(ws);
-  assert.deepEqual(output.totals, baseline.totals);
+  assert.notDeepEqual(output.totals, baseline.totals);
+  assert.equal(output.employees[0].current.basic_salary, 0);
+  assert.equal(output.employees[0].proposed.basic_salary, 999999);
   for (const scenario of ['current', 'proposed']) {
-    assert.equal(output.employees[0][scenario].breakdown[0].source, 'matrix');
-    assert.ok(output.issues.some(i => i.severity === 'warning' && i.message.startsWith(scenario + ' basic salary override is disabled')));
+    assert.equal(output.employees[0][scenario].breakdown[0].source, 'override');
+    assert.ok(output.issues.some(i => i.severity === 'warning' && i.message.startsWith(scenario + ' basic salary override exists')));
   }
   ws.matrixEntries.push({ ...ws.matrixEntries[0] });
-  assert.equal(C.resolveBasic(ws, ws.employees[0], 'current'), null);
+  assert.equal(C.resolveBasic(ws, ws.employees[0], 'current'), 0);
   blocked(ws, /Duplicate matrix entry/);
   ws.matrixEntries = [];
-  blocked(ws, /Unresolved current basic salary/);
+  assert.ok(result(ws).totals);
+  ws.matrices = [];
+  blocked(ws, /Unresolved current matrix type/);
 });
 test('matrix adjustments round the final salary exactly and do not mutate', () => {
   const entries = [{ basic_salary: 1050, note: 'keep' }];
@@ -166,7 +172,7 @@ test('BPJS caps and employee/employer separation', () => {
   assert.equal(row.current.employer_cost, 10450);
 });
 test('company-funded BPJS offsets deductions and feeds gross/taxable PPh bases once', () => {
-  const ws = workspace(10000, 20000);
+  const ws = workspace(10000000, 20000000);
   bpjs(ws, { basis: 'gross' });
   component(ws, 'DEBT', 'employee_deduction', 'fixed', 500);
   for (const enabled of [false, true]) {
@@ -177,9 +183,10 @@ test('company-funded BPJS offsets deductions and feeds gross/taxable PPh bases o
       const output = result(ws);
       for (const scenario of ['current', 'proposed']) {
         const row = output.employees[0][scenario];
-        const salary = scenario === 'current' ? 10000 : 20000;
+        const salary = scenario === 'current' ? 10000000 : 20000000;
         const employeeBPJS = salary / 100, employerBPJS = salary / 50;
-        const expectedTax = enabled ? C.grossUpTax(salary + (basis === 'basic' ? 0 : employeeBPJS), '0.1') : 0;
+        const expectedTax = enabled ? C.tax.grossUp({ gross: salary + employeeBPJS + employerBPJS, category: 'permanent', ptkp: 'TK/0' }).amount : 0;
+                if (enabled) assert.equal(row.breakdown.find(item => item.code === 'pph').basis_before_allowance, salary + employeeBPJS + employerBPJS);
         assert.equal(row.bpjs_allowance, employeeBPJS);
         assert.equal(row.employee_bpjs, employeeBPJS);
         assert.equal(row.employer_bpjs, employerBPJS);
@@ -200,7 +207,7 @@ test('company-funded BPJS offsets deductions and feeds gross/taxable PPh bases o
   ws.bpjsRules[0].employee_enabled = false;
   const row = result(ws).employees[0].current;
   assert.equal(row.bpjs_allowance, 0);
-  assert.equal(row.employer_bpjs, 200);
+  assert.equal(row.employer_bpjs, 200000);
 });
 test('BPJS selected and gross bases, participation, and enable flags', () => {
   const ws = workspace();
@@ -219,20 +226,20 @@ test('BPJS selected and gross bases, participation, and enable flags', () => {
   assert.equal(result(ws).employees[0].current.employer_bpjs, 0);
 });
 for (const method of ['gross', 'net', 'gross_up']) {
-  test('tax treatment: ' + method + ' never double counts employer tax', () => {
-    const ws = workspace();
+  test('legacy employee tax method ' + method + ' does not override scenario gross-up', () => {
+    const ws = workspace(10000000, 10000000);
     ws.globalRules.tax_enabled = true;
     ws.employees[0].pph_rate = '0.1';
     ws.employees[0].pph_method = method;
     const row = result(ws).employees[0].current;
-    assert.equal(row.pph, 1111);
-    assert.equal(row.gross, 11111);
-    assert.equal(row.take_home_pay, 10000);
-    assert.equal(row.employer_cost, 11111);
-    assert.equal(row.tax_allowance, 1111);
+    assert.equal(row.pph, 230179);
+    assert.equal(row.gross, 10230179);
+    assert.equal(row.take_home_pay, 10000000);
+    assert.equal(row.employer_cost, 10230179);
+    assert.equal(row.tax_allowance, 230179);
     assert.equal(row.employer_tax_cost, 0);
     assert.equal(row.breakdown.find(item => item.code === 'pph').method, 'gross_up');
-    assert.equal(row.breakdown.find(item => item.code === 'tax_allowance').amount, 1111);
+    assert.equal(row.breakdown.find(item => item.code === 'tax_allowance').amount, 230179);
   });
 }
 test('gross-up uses exact decimals and rejects singular rates', () => {
@@ -240,18 +247,10 @@ test('gross-up uses exact decimals and rejects singular rates', () => {
   assert.equal(C.grossUpTax(3, '0.142857142857142857'), 0);
   assert.equal(C.grossUpTax(10000, '0'), 0);
   for (const rate of [-0.1, 1, 2, '', 'NaN']) assert.throws(() => C.grossUpTax(10000, rate));
-  const ws = workspace(); ws.globalRules.tax_enabled = true;
-  ws.employees[0].pph_rate = 1;
-  blocked(ws, /Tarif PPh gross-up/);
-  ws.employees[0].pph_fixed_override = 500;
-  const row = result(ws).employees[0].current;
-  assert.equal(row.gross, 10500);
-  assert.equal(row.pph, 500);
-  assert.equal(row.take_home_pay, 10000);
-  assert.equal(row.employer_cost, 10500);
+  // This legacy decimal helper is not the automatic payroll tax engine.
 });
 test('gross-up leaves BPJS and percentage components on pre-allowance bases', () => {
-  const ws = workspace();
+  const ws = workspace(10000000, 12000000);
   component(ws, 'GROSS', 'earning', 'percentage_gross', '0.1');
   bpjs(ws, { basis: 'gross' });
   const before = result(ws);
@@ -260,6 +259,7 @@ test('gross-up leaves BPJS and percentage components on pre-allowance bases', ()
   const after = result(ws);
   for (const scenario of ['current', 'proposed']) {
     const a = after.employees[0][scenario], b = before.employees[0][scenario];
+    assert.ok(a.pph > 0);
     assert.equal(a.gross, b.gross + a.pph);
     assert.equal(a.employee_bpjs, b.employee_bpjs);
     assert.equal(a.employer_bpjs, b.employer_bpjs);
@@ -269,23 +269,23 @@ test('gross-up leaves BPJS and percentage components on pre-allowance bases', ()
     assert.equal(after.totals[scenario].gross, a.gross);
   }
 });
-test('tax bases, rounding, manual zero override, and disabled tax', () => {
-  const ws = workspace();
+test('legacy tax bases, rounding and fixed overrides are inert; disabled tax is zero', () => {
+  const ws = workspace(10000000, 10000000);
   component(ws, 'TAXABLE', 'earning', 'fixed', 1000);
   component(ws, 'EXEMPT', 'earning', 'fixed', 2000, { taxable: false });
   ws.globalRules.tax_enabled = true;
   ws.employees[0].pph_rate = '0.1';
-  for (const [basis, expected] of [['taxable', 1222], ['gross', 1444], ['basic', 1111]]) {
+  for (const basis of ['taxable', 'gross', 'basic']) {
     ws.globalRules.tax_basis = basis;
-    assert.equal(result(ws).employees[0].current.pph, expected);
+    assert.equal(result(ws).employees[0].current.pph, 230202);
   }
   ws.employees[0].pph_fixed_override = 155;
   ws.globalRules.tax_rounding = 100;
-  assert.equal(result(ws).employees[0].current.pph, 200);
+  assert.equal(result(ws).employees[0].current.pph, 230202);
   ws.employees[0].pph_fixed_override = 0;
   let row = result(ws).employees[0].current;
-  assert.equal(row.pph, 0);
-  assert.equal(row.breakdown.find(item => item.code === 'pph').source, 'manual_override');
+  assert.equal(row.pph, 230202);
+  assert.equal(row.breakdown.find(item => item.code === 'pph').source, 'automatic_pph21');
   ws.employees[0].pph_fixed_override = 900;
   ws.globalRules.tax_enabled = false;
   assert.equal(result(ws).employees[0].current.pph, 0);
@@ -341,7 +341,7 @@ const invalidCases = [
   ['invalid BPJS bounds', ws => bpjs(ws, { minimum_basis: 100, maximum_basis: 10 }), /minimum basis exceeds/],
   ['negative BPJS rate', ws => bpjs(ws, { employee_rate: -0.01 }), /employee_rate/],
   ['invalid rounding', ws => { ws.globalRules.rounding = 0; }, /rounding/],
-  ['invalid tax method', ws => { ws.employees[0].pph_method = 'unknown'; }, /PPh method/],
+  ['invalid tax policy', ws => { ws.globalRules.current_pph_policy = 'unknown'; }, /current_pph_policy/],
   ['string boolean', ws => { ws.employees[0].active = 'false'; }, /boolean/]
 ];
 for (const [name, mutate, pattern] of invalidCases) test('blocking validation: ' + name, () => { const ws = workspace(); mutate(ws); blocked(ws, pattern); });
@@ -352,14 +352,14 @@ test('malformed workspace returns structured errors', () => {
 });
 test('warning conditions remain calculable and employee issues are attached', () => {
   const ws = workspace(12000, 10000);
-  ws.employees[0].ptkp_status = '';
+  ws.employees[0].ptkp_status = 'TK/0';
   ws.employees[0].bpjs_kesehatan = false;
   ws.employees[0].current_basic_override = 13000;
   ws.employees[0].proposed_golongan = '2-PM2';
   ws.employees[0].proposed_basic_override = 9000;
   Object.assign(ws.matrixEntries[1], { golongan: '2-PM2', salary_group: '2', professional_category: 'PM', kmk_level: 2 });
   const output = result(ws);
-  for (const pattern of [/disabled/, /PTKP/, /excluded/, /override is disabled and ignored/, /basic salary is lower/, /take-home pay is lower/, /salary group changes/, /professional category changes/]) {
+  for (const pattern of [/disabled/, /excluded/, /override exists/, /basic salary is lower/, /take-home pay is lower/, /salary group changes/, /professional category changes/]) {
     assert.ok(output.issues.some(issue => pattern.test(issue.message)), String(pattern));
   }
   assert.ok(output.employees[0].issues.length > 0);

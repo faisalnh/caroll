@@ -12,20 +12,41 @@ Buka `index.html` di Google Chrome desktop. Pilih **Coba data contoh**, **Buat w
 - [Workspace contoh fiktif](samples/sample-workspace.csv)
 - [Template impor karyawan](samples/employee-import-template.csv)
 
+## Jenis matriks dan gaji pokok
+
+Matriks memiliki jenis wajib: `regular` dan `admin` sebagai jenis awal, serta jenis kustom yang dinormalisasi lowercase dengan pola `^[a-z][a-z0-9_-]*$`. Satu induk unik per **skenario + jenis**; entri memperoleh jenis dari induk. Pilih skenario/jenis/identitas untuk mengedit, membuat 300 sel otomatis, menyesuaikan, menyalin ke jenis sama di skenario lain, atau mengekspor tanpa menyentuh jenis lain.
+
+Karyawan aktif memerlukan `current_matrix_type`; `proposed_matrix_type` opsional mengikuti jenis saat ini hanya jika `proposed_matrix_type_defaults_current` aktif (default true), terpisah dari fallback golongan. Form memakai pilihan berantai jenis → KG → profesional → KMK; penetapan jenis massal pada hasil filter perlu konfirmasi dan mempertahankan golongan/override. Runtime tidak menebak klasifikasi dari nama, jabatan, atau nominal.
+
+**Override gaji pokok eksplisit dipulihkan atas permintaan pengguna**: `current_basic_override` / `proposed_basic_override` nonblank, termasuk nol, mendahului matriks dan memunculkan peringatan; kosong kembali ke matriks. Override tidak melewati kewajiban jenis/induk valid. Ini bukan pemulihan override pajak manual; PPh tetap otomatis. CSV lama tanpa header jenis dimigrasikan ke regular/regular/kosong/true untuk induk/jenis saat ini/jenis usulan/aturan fallback; `matrix_type` yang eksplisit kosong ditolak. Lihat [format CSV](docs/CSV_FORMAT.md) untuk migrasi dan cakupan kolom.
+
 ## Batasan penting
 
 File workspace CSV adalah satu-satunya penyimpanan. Tidak ada autosave. Ekspor sebelum menutup halaman dan pastikan unduhan tersimpan. Siapa pun yang memiliki file dapat membaca data. Simpan data nyata di luar repositori; pola CSV diabaikan Git kecuali direktori `samples`.
 
-Estimasi PPh 21 bukan perhitungan pajak statutory lengkap. Tarif BPJS contoh sengaja bersifat demonstrasi, bukan tarif hukum. Konfirmasi tarif, batas, dan aturan dengan penanggung jawab payroll sebelum penggunaan nyata. Penempatan golongan selalu eksplisit, tidak ditebak dari jabatan atau nama. Aplikasi tidak menyertakan matriks otoritatif 2026/2027 atau konversi spreadsheet tertentu.
+PPh 21 otomatis hanya mencakup orang pribadi domestik pada rezim biasa tanpa DTP tahun 2024–2026: pegawai tetap nonfinal selain Desember, pegawai tidak tetap dibayar bulanan aktual, atau satu imbalan jasa biasa bukan pegawai pada bruto penuh tanpa pengecualian/sharing. Tidak mendukung tahunan/final, harian/mingguan, luar negeri, atau net legacy (gunakan gross_up). CSV lama memerlukan klasifikasi eksplisit, bulan pajak, konfirmasi rezim biasa, dan identifikasi program BPJS; tidak ditebak dari status kontrak/kode. Tarif/override PPh manual lama hanya arsip dan diabaikan. Pembulatan pajak ke bawah rupiah penuh adalah asumsi simulasi, bukan klaim kepatuhan pajak lengkap; lihat [aturan dan sumber pajak](docs/TAX_RULES.md). Tarif BPJS contoh sengaja bersifat demonstrasi, bukan tarif hukum. Konfirmasi tarif, batas, dan aturan dengan penanggung jawab payroll sebelum penggunaan nyata. Penempatan golongan selalu eksplisit, tidak ditebak dari jabatan atau nama. Aplikasi tidak membundel matriks otoritatif 2026/2027; alat konversi lokal `tools/build_august_workspace.py` bergantung pada sumber privat dan konfirmasi kebijakan, bukan inferensi runtime.
+
+Konversi wajib menerima `--policy-config private/august-policy.json` (gitignored); identifier kebijakan tidak dibundel dalam kode dan tidak boleh ditebak. Lihat [konfigurasi dan pengujian builder](docs/USER_GUIDE.md#konfigurasi-builder-privat).
+
+**Konversi privat Agustus 2026 belum siap menghasilkan payroll final.** Audit `private/mws-agustus-2026-audit.json` mencatat empat matriks: regular saat ini/usulan masing-masing **300 sel**, admin saat ini **satu sel payroll terkonfirmasi saja** (tanpa sheet otoritatif), admin usulan **60 sel KG 3**. Sel admin yang tidak terbukti tidak diekstrapolasi. Konversi hanya mencocokkan bukti golongan/gaji dan pengecualian terkonfirmasi; pengecualian regular mempertahankan override eksplisit sampai kebijakan diverifikasi. **Satu klasifikasi privat masih belum terselesaikan**, sehingga generator konversi diblokir oleh validasi dan tidak dapat mengekspor hasil final sampai dikonfirmasi serta kesalahan pemblokir diselesaikan. Draft/audit bukan hasil final. Jangan masukkan nama individu atau nominal nyata ke dokumentasi terlacak; lihat [batasan lengkap](docs/USER_GUIDE.md#batasan-konversi-privat-agustus-2026).
 
 ## Pengembangan & pengujian
 
 Runtime memakai JavaScript klasik, CSS lokal, dan API browser bawaan. Tidak ada dependensi runtime atau build.
 
-Dengan Node.js versi modern (hanya untuk pengembang):
+Untuk pengembang/builder lokal, gunakan **Node.js 20+** (disarankan LTS yang masih didukung, misalnya 22/24) dan **Python 3.10+** dengan `venv`/`pip`. Ini baseline pengembangan, bukan klaim semua versi telah diuji. Tes JS memakai `node:test`, `structuredClone`, dan `Array.at`; builder Python memakai `pathlib`, anotasi tipe modern, serta `openpyxl` untuk membaca XLSX/cache rumus. Tidak ada paket npm yang perlu diinstal. `openpyxl>=3.1.5,<3.2` dicatat di [`requirements-dev.txt`](requirements-dev.txt); pustaka ini tidak menghitung ulang rumus Excel.
+
+Jalankan dari root repositori (macOS/Linux):
 
 ```sh
+python3 -m venv .venv
+. .venv/bin/activate
+python3 -m pip install -r requirements-dev.txt
 node --test tests/*.test.js
 ```
+
+Aktivasi memastikan subprocess `python3` dari suite Node memakai dependensi virtualenv. Di Windows gunakan WSL untuk perintah ini; runner saat ini memanggil literal `python3` dan `node`. Instalasi pip memerlukan akses indeks paket/internet kecuali memakai cache atau mirror lokal; aplikasi browser tetap offline dan tanpa instalasi.
+
+Suite lengkap menyertakan tes Python builder; tanpa Python/openpyxl tes itu gagal, bukan otomatis dilewati. Hanya pemeriksaan privat yang bergantung pada config/sumber/artefak dapat dilewati. Untuk menjalankan Python langsung dan memahami baseline rekonsiliasi privat, lihat [panduan builder](docs/USER_GUIDE.md#konfigurasi-builder-privat).
 
 Lihat `docs/USER_GUIDE.md` untuk checklist penerimaan browser. Hasil pengujian tidak menggantikan peninjauan aturan payroll oleh ahli.

@@ -49,13 +49,38 @@
     if (!match || Number(match[1]) < 1 || Number(match[3]) < 1 || !Number.isSafeInteger(Number(match[1])) || !Number.isSafeInteger(Number(match[3]))) return null;
     return { salary_group: String(Number(match[1])), professional_category: match[2], kmk_level: Number(match[3]) };
   };
+  C.normalizeMatrixType = function (value) {
+    if (typeof value !== 'string') return null;
+    const type = value.trim().toLowerCase();
+    return /^[a-z][a-z0-9_-]*$/.test(type) ? type : null;
+  };
+  C.resolveMatrixType = function (ws, employee, scenario) {
+    if (!['current', 'proposed'].includes(scenario)) return '';
+    let value = employee[scenario + '_matrix_type'];
+    if ((blank(value) || (typeof value === 'string' && !value.trim())) && scenario === 'proposed' && ws.globalRules.proposed_matrix_type_defaults_current === true) value = employee.current_matrix_type;
+    return C.normalizeMatrixType(value) || '';
+  };
+  C.matrixEntryKey = function (ws, entry) {
+    const parents = ws.matrices.filter(matrix => matrix.matrix_id === entry.matrix_id);
+    if (parents.length !== 1 || !['current', 'proposed'].includes(entry.scenario) || parents[0].scenario !== entry.scenario) return null;
+    const type = C.normalizeMatrixType(parents[0].matrix_type);
+    return type ? JSON.stringify([entry.scenario, type, entry.golongan]) : null;
+  };
+  C.matrixSalary = function (ws, employee, scenario) {
+    const type = C.resolveMatrixType(ws, employee, scenario);
+    if (!type) return null;
+    const parents = ws.matrices.filter(matrix => matrix.scenario === scenario && C.normalizeMatrixType(matrix.matrix_type) === type);
+    if (parents.length !== 1) return null;
+    const code = employee[scenario + '_golongan'] || (scenario === 'proposed' && ws.globalRules.proposed_defaults_current ? employee.current_golongan : '');
+    const key = JSON.stringify([scenario, type, code]);
+    const matches = ws.matrixEntries.filter(entry => C.matrixEntryKey(ws, entry) === key);
+    return matches.length === 1 ? matches[0] : null;
+  };
   C.resolveBasic = function (ws, employee, scenario) {
     if (!['current', 'proposed'].includes(scenario)) return null;
-
-    const code = employee[scenario + '_golongan'] || (scenario === 'proposed' && ws.globalRules.proposed_defaults_current ? employee.current_golongan : '');
-    const matches = ws.matrixEntries.filter(entry => entry.scenario === scenario && entry.golongan === code);
-    const value = matches.length === 1 ? matches[0].basic_salary : null;
-    try { return value === null ? null : C.roundMoney(value, ws.globalRules.rounding); } catch (_) { return null; }
+    const override = employee[scenario + '_basic_override'];
+    const value = blank(override) ? C.matrixSalary(ws, employee, scenario)?.basic_salary : override;
+    try { return blank(value) ? null : C.roundMoney(value, ws.globalRules.rounding); } catch (_) { return null; }
   };
   C.adjustMatrix = function (entries, rate, rounding = 1) {
     const [n, d] = decimal(rate);

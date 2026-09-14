@@ -8,13 +8,25 @@ const C = globalThis.Caroll;
 const U = C.ui;
 const form = values => ({ elements: { namedItem: key => values[key] === undefined ? null : { value: values[key] } } });
 
-test('employee form only permits matrix salary selection while retaining tax overrides', () => {
+test('employee form permits matrix salary selection and automatic tax classification, not manual tax', () => {
   const keys = U.schemas.employees.map(spec => spec.key);
-  assert.ok(!keys.includes('current_basic_override'));
-  assert.ok(!keys.includes('proposed_basic_override'));
+  assert.ok(keys.includes('current_basic_override'));
+  assert.ok(keys.includes('proposed_basic_override'));
+    for (const scenario of ['current', 'proposed']) {
+      assert.equal(U.schemas.employees.find(s => s.key === scenario + '_basic_override').optional, true);
+      assert.equal(U.schemas.employees.find(s => s.key === scenario + '_matrix_type').type, 'select');
+    }
   assert.ok(keys.includes('current_golongan'));
   assert.ok(keys.includes('proposed_golongan'));
-  assert.ok(keys.includes('pph_fixed_override'));
+  assert.ok(!keys.includes('pph_fixed_override'));
+  assert.ok(!keys.includes('pph_rate'));
+  for (const key of ['tax_category', 'tax_residency', 'tax_period_type', 'tax_payment_scope']) {
+    const spec = U.schemas.employees.find(s => s.key === key);
+    assert.equal(spec.type, 'select');
+    assert.equal(spec.default, '');
+    assert.equal(spec.options[0][0], '');
+  }
+  assert.deepEqual(U.schemas.employees.find(s => s.key === 'ptkp_status').options.map(([value]) => value), ['', 'TK/0', 'TK/1', 'TK/2', 'TK/3', 'K/0', 'K/1', 'K/2', 'K/3']);
   assert.ok(!keys.includes('pph_method'));
   assert.match(U.translate('current basic salary override is disabled and ignored; salary follows matrix'), /dinonaktifkan dan diabaikan/);
 });
@@ -37,7 +49,7 @@ test('percentage scaling retains decimal digits, sign, zero, blanks and exponent
 });
 
 test('all rate form inputs retain exact strings through repeated edit/save cycles', () => {
-  for (const key of ['pph_rate', 'employee_rate', 'employer_rate', 'current_value', 'proposed_value', 'rate']) {
+  for (const key of ['employee_rate', 'employer_rate', 'current_value', 'proposed_value', 'rate']) {
     const schema = [{ key, label: key, type: 'rate', optional: true }];
     let value = '0.35';
     for (let i = 0; i < 20; i++) {
@@ -76,4 +88,16 @@ test('workspace payroll blockers permit draft confirmation; other previews stay 
     assert.equal(U.importBlocked(kind, { rejected: 1, issues: [] }), true);
     assert.equal(U.importBlocked(kind, { rejected: 0, issues: [{ severity: 'warning', message: 'Review' }] }), false);
   }
+});
+
+test('automatic tax settings require explicit classification and retain unsupported net label', () => {
+  const fields = U.schemas.globalRules;
+  assert.ok(!fields.some(s => ['tax_basis', 'tax_rounding'].includes(s.key)));
+  for (const key of ['current_tax_month', 'proposed_tax_month']) assert.equal(fields.find(s => s.key === key).type, 'month');
+  assert.equal(fields.find(s => s.key === 'tax_regime').default, '');
+  assert.equal(U.schemas.bpjsRules.find(s => s.key === 'tax_program').default, '');
+  for (const spec of U.schemas.paymentPolicies.filter(s => s.key.includes('_pph_'))) assert.match(spec.options.find(([value]) => value === 'net')[1], /tidak didukung.*gross_up/);
+  const html = require('node:fs').readFileSync(require.resolve('../index.html'), 'utf8');
+  assert.ok(html.indexOf('js/tax.js') < html.indexOf('js/validation.js'));
+  assert.ok(html.indexOf('js/tax.js') < html.indexOf('js/payroll.js'));
 });

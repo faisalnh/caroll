@@ -47,12 +47,12 @@ test('invalid parameters, unsafe money, missing groups and invalid target are re
 
 test('workspace persists settings and salaries and accepts legacy CSV without settings header', () => {
   const ws = C.createWorkspace();
-  ws.matrices = [{ matrix_id: 'a', scenario: 'current', name: 'Generated', effective_date: '', generator_settings: JSON.stringify(settings()) }];
+  ws.matrices = [{ matrix_id: 'a', scenario: 'current', matrix_type: 'regular', name: 'Generated', effective_date: '', generator_settings: JSON.stringify(settings()) }];
   ws.matrixEntries = C.generateMatrix(settings(), 'current', 'a');
   const restored = C.csv.importWorkspace(C.csv.exportWorkspace(ws));
   assert.deepEqual(JSON.parse(restored.matrices[0].generator_settings), settings());
   assert.deepEqual(restored.matrixEntries, ws.matrixEntries);
-  assert.equal(C.resolveBasic(restored, { current_golongan: '1-P1' }, 'current'), 1235960);
+  assert.equal(C.resolveBasic(restored, { current_golongan: '1-P1', current_matrix_type: 'regular' }, 'current'), 1235960);
   const legacyRows = C.csv.parse(C.csv.exportWorkspace(ws)).map(({ generator_settings, ...row }) => row);
   const legacy = C.csv.importWorkspace(C.csv.stringify(legacyRows));
   assert.equal(legacy.matrices[0].generator_settings, '');
