@@ -20,6 +20,20 @@ Karyawan aktif memerlukan `current_matrix_type`; `proposed_matrix_type` opsional
 
 **Override gaji pokok eksplisit dipulihkan atas permintaan pengguna**: `current_basic_override` / `proposed_basic_override` nonblank, termasuk nol, mendahului matriks dan memunculkan peringatan; kosong kembali ke matriks. Override tidak melewati kewajiban jenis/induk valid. Ini bukan pemulihan override pajak manual; PPh tetap otomatis. CSV lama tanpa header jenis dimigrasikan ke regular/regular/kosong/true untuk induk/jenis saat ini/jenis usulan/aturan fallback; `matrix_type` yang eksplisit kosong ditolak. Lihat [format CSV](docs/CSV_FORMAT.md) untuk migrasi dan cakupan kolom.
 
+## Membuat file uji tunggal
+
+Jalankan dari root repositori:
+
+```sh
+node tools/package.js
+```
+
+Perintah ini menghasilkan `dist/caroll-test-v0.1.0.html`. File tersebut memuat HTML aplikasi, `css/app.css`, `css/print.css`, delapan modul JavaScript dalam urutan yang sama dengan `index.html`, dan data demo fiktif yang memang berada di kode aplikasi. Builder memakai allowlist sumber aplikasi dan tidak membaca `private/`, file CSV, atau workspace payroll nyata. CSP hasil build mengizinkan CSS/JavaScript inline hanya melalui hash SHA-256 yang dihasilkan, serta tetap memakai `connect-src 'none'`.
+
+Versi build terlihat di sidebar agar laporan pengujian dapat menyebut artefak yang tepat. File tunggal ini hanya aplikasi: impor/ekspor CSV tetap sama, tidak ada autosave, dan pengguna tetap harus mengekspor workspace sebelum menutup halaman.
+
+Sebelum membagikan build, buka file hasil langsung melalui `file://` di Chrome desktop dan periksa data demo, impor/ekspor CSV, perhitungan, dialog, serta pratinjau cetak. Pemeriksaan otomatis bundler dapat dijalankan dengan `node --test tests/package.test.js`.
+
 ## Batasan penting
 
 File workspace CSV adalah satu-satunya penyimpanan. Tidak ada autosave. Ekspor sebelum menutup halaman dan pastikan unduhan tersimpan. Siapa pun yang memiliki file dapat membaca data. Simpan data nyata di luar repositori; pola CSV diabaikan Git kecuali direktori `samples`.

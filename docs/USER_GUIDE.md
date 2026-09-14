@@ -106,12 +106,17 @@ Jalankan suite lengkap dengan `node --test tests/*.test.js`. `tests/august-works
 
 ## Checklist pemeriksaan browser
 
+Untuk build uji tunggal, jalankan `node tools/package.js` lalu buka `dist/caroll-test-v0.1.0.html` langsung di Chrome. Build hanya berisi aplikasi dan demo fiktif; `private/` serta workspace CSV tidak dibundel. Packaging tidak menambahkan autosave.
+
 - Buka langsung melalui `file://`, lalu matikan jaringan dan coba semua bagian.
+- Pada build tunggal, pastikan sidebar menampilkan `v0.1.0` dan DevTools tidak melaporkan pelanggaran CSP.
 - Buat/impor data, jalankan simulasi, ekspor workspace, reset, lalu impor ulang.
 - Pastikan pratinjau impor yang dibatalkan tidak mengubah workspace.
 - Coba impor 500 karyawan dan pembaruan berdasarkan ID.
 - Salin seluruh folder ke lokasi lain lalu buka `index.html` di sana.
 - Periksa tampilan pada lebar 768px; tabel lebar dapat digulir.
+- Muat demo fiktif, periksa perhitungan dan buka/tutup dialog.
+- Impor dan ekspor CSV, lalu pastikan file unduhan dapat diimpor kembali.
 - Buka pratinjau cetak A4 landscape; periksa ringkasan sebelum mencetak.
 
 Keputusan bisnis yang masih perlu ditetapkan: matriks otoritatif tiap periode, konfirmasi penempatan jenis Admin yang belum selesai, konfigurasi tunjangan, tarif/batas BPJS, dan pemetaan spreadsheet organisasi. Versi ini meminta klasifikasi dan parameter organisasi yang terverifikasi, bukan mengarang keputusan tersebut.
