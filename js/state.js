@@ -9,6 +9,25 @@
     if (['jkk', 'jkm', 'jht', 'jp'].includes(rule.tax_program)) return 'bpjs_ketenagakerjaan';
     return null;
   };
+  C.bpjsEligible = (rules, employee, scenario, kind) => {
+    if (!['current', 'proposed'].includes(scenario)) return null;
+    if (kind === 'bpjs_kesehatan') {
+      if ((rules.bpjs_kesehatan_eligibility || 'manual') === 'manual') return employee.bpjs_kesehatan === true;
+      if (rules.bpjs_kesehatan_eligibility !== 'tenure') return null;
+      const joined = String(employee.join_date || ''), reference = String(rules[scenario + '_bpjs_reference_date'] || '');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(joined) || !/^\d{4}-\d{2}-\d{2}$/.test(reference)) return null;
+      const [jy, jm, jd] = joined.split('-').map(Number), [ry, rm, rd] = reference.split('-').map(Number);
+      // Count completed calendar months; the current month is incomplete until reaching the join day.
+      const months = (ry - jy) * 12 + rm - jm - (rd < jd ? 1 : 0);
+      return months >= Number(rules.bpjs_kesehatan_min_months);
+    }
+    if (kind === 'bpjs_ketenagakerjaan') {
+      if ((rules.bpjs_ketenagakerjaan_eligibility || 'manual') === 'manual') return employee.bpjs_ketenagakerjaan === true;
+      if (rules.bpjs_ketenagakerjaan_eligibility !== 'permanent') return null;
+      return employee.employment_type === 'permanent';
+    }
+    return null;
+  };
   C.createWorkspace = function () {
     return {
       schemaVersion: 1,
@@ -21,6 +40,9 @@
         proposed_defaults_current: true, proposed_matrix_type_defaults_current: true, tax_enabled: false,
         tax_basis: 'taxable', tax_rounding: 1,
         current_tax_month: '', proposed_tax_month: '', tax_regime: '',
+        bpjs_kesehatan_eligibility: 'manual', bpjs_kesehatan_min_months: 0,
+        current_bpjs_reference_date: '', proposed_bpjs_reference_date: '',
+        bpjs_ketenagakerjaan_eligibility: 'manual',
         current_pph_policy: 'unconfirmed', proposed_pph_policy: 'gross_up',
         current_bpjs_kesehatan_policy: 'unconfirmed', proposed_bpjs_kesehatan_policy: 'company',
         current_bpjs_ketenagakerjaan_policy: 'employee', proposed_bpjs_ketenagakerjaan_policy: 'company'
@@ -46,7 +68,7 @@
     ws.employees = ['DEMO-001', 'DEMO-002'].map((employee_id, index) => ({
       employee_id, name: index ? 'Demo Employee Two' : 'Demo Employee One',
       unit: 'Demo Unit', department: index ? 'Teaching' : 'Administration', position: 'Demo role',
-      employment_status: 'Demo', join_date: '', active: true,
+      employment_status: 'Demo', employment_type: 'permanent', join_date: '2025-01-01', active: true,
       current_golongan: index ? '2-PM2' : '1-U1', proposed_golongan: '',
       current_matrix_type: 'regular', proposed_matrix_type: '',
       current_basic_override: '', proposed_basic_override: '', ptkp_status: 'TK/0', tax_category: 'permanent', tax_residency: 'domestic', tax_period_type: 'ordinary', tax_payment_scope: 'monthly',

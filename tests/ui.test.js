@@ -18,6 +18,7 @@ test('employee form permits matrix salary selection and automatic tax classifica
     }
   assert.ok(keys.includes('current_golongan'));
   assert.ok(keys.includes('proposed_golongan'));
+  assert.equal(U.schemas.employees.find(s => s.key === 'employment_type').type, 'select');
   assert.ok(!keys.includes('pph_fixed_override'));
   assert.ok(!keys.includes('pph_rate'));
   for (const key of ['tax_category', 'tax_residency', 'tax_period_type', 'tax_payment_scope']) {
@@ -95,6 +96,9 @@ test('automatic tax settings require explicit classification and retain unsuppor
   assert.ok(!fields.some(s => ['tax_basis', 'tax_rounding'].includes(s.key)));
   for (const key of ['current_tax_month', 'proposed_tax_month']) assert.equal(fields.find(s => s.key === key).type, 'month');
   assert.equal(fields.find(s => s.key === 'tax_regime').default, '');
+  assert.equal(fields.find(s => s.key === 'bpjs_kesehatan_eligibility').default, 'manual');
+  assert.equal(fields.find(s => s.key === 'bpjs_ketenagakerjaan_eligibility').default, 'manual');
+  assert.equal(fields.find(s => s.key === 'bpjs_kesehatan_min_months').min, 0);
   assert.equal(U.schemas.bpjsRules.find(s => s.key === 'tax_program').default, '');
   for (const spec of U.schemas.paymentPolicies.filter(s => s.key.includes('_pph_'))) assert.match(spec.options.find(([value]) => value === 'net')[1], /tidak didukung.*gross_up/);
   const html = require('node:fs').readFileSync(require.resolve('../index.html'), 'utf8');

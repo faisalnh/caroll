@@ -82,6 +82,22 @@
     const value = blank(override) ? C.matrixSalary(ws, employee, scenario)?.basic_salary : override;
     try { return blank(value) ? null : C.roundMoney(value, ws.globalRules.rounding); } catch (_) { return null; }
   };
+  C.normalizeBasicOverrides = function (ws) {
+    const changes = [];
+    for (const employee of ws.employees) {
+      for (const scenario of ['current', 'proposed']) {
+        const field = scenario + '_basic_override';
+        if (blank(employee[field])) continue;
+        const entry = C.matrixSalary(ws, employee, scenario);
+        if (!entry) continue;
+        const override = C.roundMoney(employee[field], ws.globalRules.rounding);
+        const matrix = C.roundMoney(entry.basic_salary, ws.globalRules.rounding);
+        changes.push({ employee_id: employee.employee_id, scenario, from: override, to: matrix, differs: override !== matrix });
+        employee[field] = '';
+      }
+    }
+    return changes;
+  };
   C.adjustMatrix = function (entries, rate, rounding = 1) {
     const [n, d] = decimal(rate);
     return entries.map(entry => {

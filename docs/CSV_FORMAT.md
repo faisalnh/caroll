@@ -97,8 +97,9 @@ Fields in stable order:
 | `unit` | Organizational unit, optional text |
 | `department` | Department, optional text |
 | `position` | Position, optional text |
-| `employment_status` | Employment classification, optional text |
-| `join_date` | Optional ISO date |
+| `employment_status` | Legacy/free-text employment classification; never used for automatic BPJS eligibility |
+| `employment_type` | Optional structured enum `permanent|non_permanent`; required when global BPJS TK eligibility is `permanent` |
+| `join_date` | Optional ISO date; required when global BPJS Kesehatan eligibility uses tenure |
 | `active` | Required boolean |
 | `proposed_golongan` | Optional code; blank uses current if global rule enables it |
 | `current_basic_override` | Optional nonnegative integer rupiah; nonblank (including zero) takes precedence over current matrix salary; blank uses matrix |
@@ -159,11 +160,11 @@ Fields: `code!`, `name!`, `tax_program`, `employee_rate!`, `employer_rate!`, `mi
 - `rounding`: integer `1`, `100`, or `1000` rupiah.
 - `active`: enable program.
 
-Employee participation, basis bounds, contribution rounding, and active/employee/employer enable flags are unchanged. Only programs whose scenario policy is `company` fund their calculated employee share through `bpjs_allowance`; sum those shares, add the allowance to gross, and retain the full employee BPJS deduction. Under `employee`, that program adds no allowance. This calculated allowance is independent of `tax_enabled` and is zero when the employee contribution is zero; it is not a new workspace input. Employer BPJS remains a separate employer cost.
+Employee participation is selected by global eligibility mode. `manual` uses the existing employee booleans. BPJS Kesehatan mode `tenure` compares `join_date` with the scenario reference date using completed calendar months and includes employees at or above `bpjs_kesehatan_min_months`. BPJS TK mode `permanent` includes only `employment_type=permanent`; free-text `employment_status` and tax classification are never inferred. Basis bounds, contribution rounding, and active/employee/employer enable flags are unchanged. Only programs whose scenario policy is `company` fund their calculated employee share through `bpjs_allowance`; sum those shares, add the allowance to gross, and retain the full employee BPJS deduction. Under `employee`, that program adds no allowance. This calculated allowance is independent of `tax_enabled` and is zero when the employee contribution is zero; it is not a new workspace input. Employer BPJS remains a separate employer cost.
 
 #### `global_rule` → `globalRules` (exactly one)
 
-Fields: `currency!`, `rounding!`, `percentage_precision!`, `include_inactive!`, `allow_negative_thp!`, `proposed_defaults_current!`, `proposed_matrix_type_defaults_current!`, `tax_enabled!`, `tax_basis!`, `tax_rounding!`, `current_tax_month`, `proposed_tax_month`, `tax_regime` (then scenario payment policies).
+Fields: `currency!`, `rounding!`, `percentage_precision!`, `include_inactive!`, `allow_negative_thp!`, `proposed_defaults_current!`, `proposed_matrix_type_defaults_current!`, `tax_enabled!`, `tax_basis!`, `tax_rounding!`, `current_tax_month`, `proposed_tax_month`, `tax_regime`, `bpjs_kesehatan_eligibility`, `bpjs_kesehatan_min_months`, `current_bpjs_reference_date`, `proposed_bpjs_reference_date`, `bpjs_ketenagakerjaan_eligibility` (then scenario payment policies).
 
 - `currency`: `IDR`.
 - `rounding`: money calculation step, `1`, `100`, or `1000`.
@@ -172,6 +173,8 @@ Fields: `currency!`, `rounding!`, `percentage_precision!`, `include_inactive!`, 
 - `allow_negative_thp`: permit negative take-home pay.
 - `proposed_defaults_current`: blank proposed Golongan defaults to the current code only; absent a salary override, lookup uses the unique proposed scenario/type cell.
 - `proposed_matrix_type_defaults_current`: independent required boolean, default true; blank proposed type follows current type only when enabled. Does not control Golongan fallback.
+- `bpjs_kesehatan_eligibility`: `manual|tenure`; legacy files default to `manual`. `bpjs_kesehatan_min_months` is a nonnegative integer. Tenure mode requires valid ISO `current_bpjs_reference_date` and `proposed_bpjs_reference_date`.
+- `bpjs_ketenagakerjaan_eligibility`: `manual|permanent`; legacy files default to `manual`.
 - `tax_enabled`: enable **PPh 21 otomatis** under each scenario's policy and eligibility requirements. Disabling tax sets PPh and tax allowance to zero but does not disable BPJS allowance.
 - `tax_basis`: required legacy enum `taxable`, `gross`, or `basic`; retained for CSV compatibility, not a basis selector for automatic tax.
 - `tax_rounding`: required legacy integer `1`, `100`, or `1000`; retained for archival CSV normalization, not automatic tax rounding.

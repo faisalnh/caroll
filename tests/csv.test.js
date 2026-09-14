@@ -54,6 +54,28 @@ test('all workspace record types round-trip through stable superset without JSON
   assert.equal(csv.importWorkspace(csv.stringify(rows)).employees.length, 2);
 });
 
+test('BPJS eligibility settings and permanent status round-trip while legacy headers default to manual', () => {
+  const ws = sample();
+  Object.assign(ws.globalRules, {
+    bpjs_kesehatan_eligibility: 'tenure', bpjs_kesehatan_min_months: 6,
+    current_bpjs_reference_date: '2026-08-31', proposed_bpjs_reference_date: '2027-08-31',
+    bpjs_ketenagakerjaan_eligibility: 'permanent'
+  });
+  ws.employees[0].employment_type = 'non_permanent';
+  const restored = csv.importWorkspace(csv.exportWorkspace(ws));
+  assert.equal(restored.globalRules.bpjs_kesehatan_min_months, 6);
+  assert.equal(restored.globalRules.bpjs_ketenagakerjaan_eligibility, 'permanent');
+  assert.equal(restored.employees[0].employment_type, 'non_permanent');
+
+  const rows = csv.parse(csv.exportWorkspace(ws));
+  const removed = new Set(['employment_type', 'bpjs_kesehatan_eligibility', 'bpjs_kesehatan_min_months', 'current_bpjs_reference_date', 'proposed_bpjs_reference_date', 'bpjs_ketenagakerjaan_eligibility']);
+  const legacy = rows.map(row => Object.fromEntries(Object.entries(row).filter(([key]) => !removed.has(key))));
+  const imported = csv.importWorkspace(csv.stringify(legacy));
+  assert.equal(imported.globalRules.bpjs_kesehatan_eligibility, 'manual');
+  assert.equal(imported.globalRules.bpjs_ketenagakerjaan_eligibility, 'manual');
+  assert.equal(imported.employees[0].employment_type, '');
+});
+
 test('workspace rejects schema, unknown records/columns, duplicate keys, irrelevant values, references and invalid rules', () => {
   const changes = [
     rows => { rows[0].schema_version = '2'; },

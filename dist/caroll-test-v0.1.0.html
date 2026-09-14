@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-lUgWvbDWzMZB0tcAVqSITY0PdkrgsSrFCC/PQ4fU/rw=' 'sha256-BS8K+limJ6kdrFQp6HkAJVUUmRGYjAUWyZuLkVGASa0=' 'sha256-iGXwgu3BK6JLL8LTboM5tEo5jJHD3Z7xhOTlbNMi4KA=' 'sha256-0M4ajnk69Uu2Y4sBtZKMlMKJ2goubFb9VMY3JONzY2E=' 'sha256-WlQD9g7QsKWXmf+kWH549pa1BdxhuBMXBazzkdFrpBU=' 'sha256-9mXzkpaRDFO5qtGOS5QERVuk/yXDGbhlrtE+yq1ADRM=' 'sha256-q4UOPHMJF6Zs11sqavmtrhKlTxSDhqCF4B4InTmmmk8=' 'sha256-07tUialhzeue3uJ5NU3+gxTRSW693vaFz82DVnLvht4='; style-src 'sha256-qiZ35bLOXw0OBbvS84MvrFuOb7zAJ1qe2JcXdzXHEQc=' 'sha256-99ludUfMa/RoO7bM7pT8iGkaZx6qkgcdO5fDjQt29ug='; img-src data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-72p2vHXWUodox4hbyLK/kifSmW8WjM1CHhptExIZs2g=' 'sha256-mppt7OH6uqYFD30K47d/xySFjtEVu3T81MgPedZNTR0=' 'sha256-iGXwgu3BK6JLL8LTboM5tEo5jJHD3Z7xhOTlbNMi4KA=' 'sha256-+hrRmj5ZZIGjWm65e+GElhexyjpsNQTNrOsQF+p6U3c=' 'sha256-wnVx7+YymWQbEi41ouPMhqGyaEDCX+3t7p1tiIBLqu8=' 'sha256-W7dXPQWt5JY34yrnVAYuz1ltF37l/dEEPYy/qpx7rGY=' 'sha256-lzj3TrMCkmXfZG8kTrU9kz4cbLVuHS5lAGQKBnV5UOs=' 'sha256-P5BOEp7xMVFjUSeCb3t9+349wMpnCUIotqi5f2AbUvE='; style-src 'sha256-qiZ35bLOXw0OBbvS84MvrFuOb7zAJ1qe2JcXdzXHEQc=' 'sha256-99ludUfMa/RoO7bM7pT8iGkaZx6qkgcdO5fDjQt29ug='; img-src data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>Caroll — Simulator Payroll</title>
 <style>
 :root{font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#20332e;background:#f5f7f6;font-size:14px;--green:#176b52;--line:#dde5e0;--muted:#708078;--red:#b33e3e}*{box-sizing:border-box}body{margin:0}button,input,select,textarea{font:inherit}button,a,input,select,textarea{outline-offset:3px}button{cursor:pointer;border:1px solid #d5dfd9;border-radius:7px;padding:10px 14px;background:white;color:#314a40;font-weight:600}button:hover{background:#edf4f0;border-color:#8baa99}button:disabled{opacity:.45;cursor:not-allowed}.primary{background:var(--green);color:white;border-color:var(--green)}.primary:hover{background:#10543f}.danger{color:var(--red)}.small{padding:6px 9px;font-size:12px}.sidebar{position:fixed;inset:0 auto 0 0;width:225px;background:#fff;border-right:1px solid var(--line);padding:32px 22px;display:flex;flex-direction:column}.brand{display:flex;align-items:center;text-decoration:none;font-size:33px;font-weight:800;letter-spacing:-1.5px;color:#153f31;gap:8px}.brand-mark{display:grid;place-items:center;background:var(--green);color:white;width:36px;height:36px;border-radius:11px;font-size:32px}.brand-dot{color:#60b58e;margin-left:-7px}.eyebrow{font-size:10px;letter-spacing:2px;color:var(--muted);margin:25px 0 20px}nav{display:grid;gap:8px}nav button{text-align:left;display:flex;gap:14px;background:none;border:0;padding:13px 15px;font-weight:500}nav button[aria-current=page]{background:#e8f2ec;color:#176b52;font-weight:700}.nav-number{color:#849c8e;font-size:12px}.sidebar-bottom{margin-top:auto;font-size:12px;color:#547162;line-height:1.7}.sidebar-bottom p{color:var(--muted)}.offline-dot{display:inline-block;width:7px;height:7px;background:#40976b;border-radius:50%;margin-right:5px}.version{font-size:9px;letter-spacing:1.5px}.app-shell{margin-left:225px}.topbar{min-height:76px;padding:16px 36px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;background:#fff;gap:12px}.topbar>div{display:flex;align-items:center;gap:16px;flex-wrap:wrap}#workspace-name{font-weight:600}.badge{display:inline-block;font-size:11px;padding:4px 8px;border-radius:5px;background:#edf2ef;color:#5e7066;white-space:nowrap}.badge.warning,.warning{color:#8d6313;background:#fff5de}.badge.error,.error{color:#a83333;background:#fff0ee}.badge.override{color:#28699c;background:#eaf3ff}main{padding:34px 36px;min-height:calc(100vh - 155px);max-width:1900px;margin:auto}.page-heading{display:flex;justify-content:space-between;align-items:center;gap:20px;margin-bottom:25px}h1{font-size:27px;letter-spacing:-.8px;margin:0 0 8px}h2{font-size:17px;margin:0 0 16px}h3{font-size:14px}p{line-height:1.65}.subtitle,.muted{color:var(--muted)}.subtitle{margin:0;font-size:13px}.actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.hero{background:#e9f2ed;border:1px solid #d3e4d9;border-radius:12px;padding:30px;margin-bottom:24px;display:flex;justify-content:space-between;align-items:center;gap:24px}.hero h2{font-size:23px;margin-bottom:8px}.hero p{max-width:590px;color:#5f7568}.hero-label{font-size:10px;letter-spacing:1.7px;font-weight:700;color:var(--green)}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:16px;margin-bottom:24px}.card,.panel{background:#fff;border:1px solid var(--line);border-radius:10px}.card{padding:20px}.card .value{font-size:26px;letter-spacing:-.5px;font-weight:650;margin:14px 0 7px}.card .label{font-size:12px;color:var(--muted)}.panel{padding:22px;margin-bottom:22px}.panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:17px}.panel-head h2{margin:0}.two-column{display:grid;grid-template-columns:1.25fr 1fr;gap:22px}.notice{border-left:3px solid #dbb053;background:#fff8e9;padding:12px 16px;color:#80642c;border-radius:5px;font-size:12px;line-height:1.7;margin-bottom:20px}.filters{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px}.filters input{min-width:200px;flex:1}.filters select{max-width:210px}input,select,textarea{border:1px solid #d7e0da;background:white;border-radius:6px;padding:10px 11px;color:#263f33;min-width:0;max-width:100%}input:focus,select:focus,textarea:focus{border-color:#388563;outline:2px solid #bbddc9}input[type=checkbox]{accent-color:var(--green);width:17px;height:17px}textarea{resize:vertical;min-height:76px}.table-wrap{overflow:auto;border:1px solid var(--line);border-radius:8px;background:white;max-height:65vh}table{width:100%;border-collapse:collapse;text-align:left;font-size:12px}th{background:#f5f8f6;color:#697c70;font-weight:600;font-size:11px;white-space:nowrap;position:sticky;top:0;z-index:1}th,td{padding:13px 14px;border-bottom:1px solid #e9eeeb;vertical-align:middle}td{white-space:nowrap}td.wrap{white-space:normal;min-width:180px}tbody tr:hover{background:#f8fbf9}tbody tr:last-child td{border-bottom:0}.money{font-variant-numeric:tabular-nums;text-align:right}.positive{color:#17704d}.negative{color:var(--red)}.empty{text-align:center;padding:50px 20px;color:var(--muted)}.empty h2{color:#345543}.privacy{border-top:1px solid var(--line);font-size:11px;color:#7b877f;padding:20px 36px;line-height:1.6}dialog{width:min(870px,95vw);max-height:90vh;border:1px solid var(--line);border-radius:12px;padding:0;color:#243d30;box-shadow:0 25px 100px #122c3040}dialog::backdrop{background:#132d2866}dialog .dialog-header{padding:22px 26px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}dialog h2{margin:0}dialog .dialog-body{padding:24px 26px}dialog .dialog-footer{padding:16px 26px;border-top:1px solid var(--line);display:flex;gap:9px;justify-content:flex-end;background:#f9fbfa;position:sticky;bottom:0}.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.field{display:flex;flex-direction:column;gap:7px;font-size:12px;font-weight:600}.field small{font-size:11px;color:var(--muted);font-weight:400;line-height:1.5}.field.check{flex-direction:row;align-items:center;min-height:40px}.field.full{grid-column:1/-1}.form-error{padding:12px;background:#fff0ee;color:#a83333;border-radius:6px;margin-bottom:15px}.issues{max-height:250px;overflow:auto;padding:0;list-style:none;font-size:12px}.issues li{padding:9px 12px;margin:5px 0;border-radius:5px;line-height:1.6}.check-list{display:grid;grid-template-columns:repeat(2,1fr);max-height:230px;overflow:auto;border:1px solid var(--line);padding:12px;gap:10px;margin:10px 0 20px}.check-list label{display:flex;gap:9px;align-items:center}.detail-object{display:grid;grid-template-columns:minmax(150px,1fr) 2fr;gap:8px;font-size:12px;border-bottom:1px solid var(--line);padding:12px 0}.detail-object dt{color:var(--muted)}.detail-object dd{margin:0;overflow-wrap:anywhere}.detail-object dl{margin:0}.step{display:flex;gap:12px;padding:13px 0;border-bottom:1px solid var(--line)}.step span{color:#3d8964;font-size:12px;font-weight:700}.step p{margin:4px 0;font-size:12px;color:var(--muted)}#notifications{position:fixed;bottom:22px;right:24px;z-index:10;max-width:450px}.toast{background:#183f30;color:#fff;border-radius:8px;padding:15px 20px;box-shadow:0 6px 30px #0002;line-height:1.5}.skip{position:absolute;top:-80px;z-index:20;background:white;padding:10px}.skip:focus{top:0}.print-only{display:none}@media(max-width:1050px){.sidebar{width:185px;padding:26px 14px}.app-shell{margin-left:185px}main{padding:25px 22px}.topbar{padding:15px 22px}.two-column{grid-template-columns:1fr}.hero{display:block}.hero .actions{margin-top:20px}.page-heading{align-items:flex-start}}@media(max-width:780px){.sidebar{width:150px;padding:22px 10px}.brand{font-size:27px}.brand-mark{width:30px;height:32px}.app-shell{margin-left:150px}.eyebrow{font-size:8px;letter-spacing:1px}nav button{padding:12px 8px;gap:8px}.page-heading{display:block}.page-heading .actions{margin-top:14px}.form-grid{grid-template-columns:1fr}.topbar{align-items:flex-start}.topbar>div{gap:7px}.sidebar-bottom{font-size:10px}.card{padding:16px}main{padding:22px 16px}.privacy{padding:16px}}
@@ -145,6 +145,25 @@
     if (['jkk', 'jkm', 'jht', 'jp'].includes(rule.tax_program)) return 'bpjs_ketenagakerjaan';
     return null;
   };
+  C.bpjsEligible = (rules, employee, scenario, kind) => {
+    if (!['current', 'proposed'].includes(scenario)) return null;
+    if (kind === 'bpjs_kesehatan') {
+      if ((rules.bpjs_kesehatan_eligibility || 'manual') === 'manual') return employee.bpjs_kesehatan === true;
+      if (rules.bpjs_kesehatan_eligibility !== 'tenure') return null;
+      const joined = String(employee.join_date || ''), reference = String(rules[scenario + '_bpjs_reference_date'] || '');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(joined) || !/^\d{4}-\d{2}-\d{2}$/.test(reference)) return null;
+      const [jy, jm, jd] = joined.split('-').map(Number), [ry, rm, rd] = reference.split('-').map(Number);
+      // Count completed calendar months; the current month is incomplete until reaching the join day.
+      const months = (ry - jy) * 12 + rm - jm - (rd < jd ? 1 : 0);
+      return months >= Number(rules.bpjs_kesehatan_min_months);
+    }
+    if (kind === 'bpjs_ketenagakerjaan') {
+      if ((rules.bpjs_ketenagakerjaan_eligibility || 'manual') === 'manual') return employee.bpjs_ketenagakerjaan === true;
+      if (rules.bpjs_ketenagakerjaan_eligibility !== 'permanent') return null;
+      return employee.employment_type === 'permanent';
+    }
+    return null;
+  };
   C.createWorkspace = function () {
     return {
       schemaVersion: 1,
@@ -157,6 +176,9 @@
         proposed_defaults_current: true, proposed_matrix_type_defaults_current: true, tax_enabled: false,
         tax_basis: 'taxable', tax_rounding: 1,
         current_tax_month: '', proposed_tax_month: '', tax_regime: '',
+        bpjs_kesehatan_eligibility: 'manual', bpjs_kesehatan_min_months: 0,
+        current_bpjs_reference_date: '', proposed_bpjs_reference_date: '',
+        bpjs_ketenagakerjaan_eligibility: 'manual',
         current_pph_policy: 'unconfirmed', proposed_pph_policy: 'gross_up',
         current_bpjs_kesehatan_policy: 'unconfirmed', proposed_bpjs_kesehatan_policy: 'company',
         current_bpjs_ketenagakerjaan_policy: 'employee', proposed_bpjs_ketenagakerjaan_policy: 'company'
@@ -182,7 +204,7 @@
     ws.employees = ['DEMO-001', 'DEMO-002'].map((employee_id, index) => ({
       employee_id, name: index ? 'Demo Employee Two' : 'Demo Employee One',
       unit: 'Demo Unit', department: index ? 'Teaching' : 'Administration', position: 'Demo role',
-      employment_status: 'Demo', join_date: '', active: true,
+      employment_status: 'Demo', employment_type: 'permanent', join_date: '2025-01-01', active: true,
       current_golongan: index ? '2-PM2' : '1-U1', proposed_golongan: '',
       current_matrix_type: 'regular', proposed_matrix_type: '',
       current_basic_override: '', proposed_basic_override: '', ptkp_status: 'TK/0', tax_category: 'permanent', tax_residency: 'domestic', tax_period_type: 'ordinary', tax_payment_scope: 'monthly',
@@ -294,6 +316,22 @@
     const override = employee[scenario + '_basic_override'];
     const value = blank(override) ? C.matrixSalary(ws, employee, scenario)?.basic_salary : override;
     try { return blank(value) ? null : C.roundMoney(value, ws.globalRules.rounding); } catch (_) { return null; }
+  };
+  C.normalizeBasicOverrides = function (ws) {
+    const changes = [];
+    for (const employee of ws.employees) {
+      for (const scenario of ['current', 'proposed']) {
+        const field = scenario + '_basic_override';
+        if (blank(employee[field])) continue;
+        const entry = C.matrixSalary(ws, employee, scenario);
+        if (!entry) continue;
+        const override = C.roundMoney(employee[field], ws.globalRules.rounding);
+        const matrix = C.roundMoney(entry.basic_salary, ws.globalRules.rounding);
+        changes.push({ employee_id: employee.employee_id, scenario, from: override, to: matrix, differs: override !== matrix });
+        employee[field] = '';
+      }
+    }
+    return changes;
   };
   C.adjustMatrix = function (entries, rate, rounding = 1) {
     const [n, d] = decimal(rate);
@@ -513,6 +551,15 @@
     if (rules.percentage_precision !== 2) error('Percentage precision must be 2');
     for (const key of ['include_inactive', 'allow_negative_thp', 'proposed_defaults_current', 'proposed_matrix_type_defaults_current', 'tax_enabled']) boolean(rules[key], key);
     choice(rules.tax_basis, ['taxable', 'gross', 'basic'], 'tax basis');
+    choice(rules.bpjs_kesehatan_eligibility || 'manual', ['manual', 'tenure'], 'aturan kepesertaan BPJS Kesehatan');
+    choice(rules.bpjs_ketenagakerjaan_eligibility || 'manual', ['manual', 'permanent'], 'aturan kepesertaan BPJS TK');
+    if ((rules.bpjs_kesehatan_eligibility || 'manual') === 'tenure') {
+      numeric(rules.bpjs_kesehatan_min_months, 'masa kerja minimum BPJS Kesehatan', null, false, true, true);
+      for (const scenario of ['current', 'proposed']) {
+        const date = rules[scenario + '_bpjs_reference_date'];
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '') || !Number.isFinite(Date.parse(date)) || new Date(date).toISOString().slice(0, 10) !== date) error('Isi tanggal acuan BPJS ' + scenario + ' (YYYY-MM-DD).');
+      }
+    }
     for (const [key, options] of Object.entries(C.paymentPolicies)) if (!blank(rules[key])) choice(rules[key], options, key);
     if (!rules.tax_enabled) warning('Estimasi PPh 21 is disabled; results exclude tax');
     if (rules.tax_enabled) {
@@ -578,10 +625,11 @@
       if (blank(employee.name) || !String(employee.name).trim()) error('Missing employee name', employee);
       if (!employee.current_golongan) error('Missing current Golongan', employee);
       if (!C.normalizeMatrixType(employee.current_matrix_type)) error('Invalid or missing current_matrix_type', employee);
-      for (const key of ['bpjs_kesehatan', 'bpjs_ketenagakerjaan']) {
-        boolean(employee[key], key, employee);
-        if (!employee[key]) warning('Employee excluded from ' + key, employee);
-      }
+      for (const key of ['bpjs_kesehatan', 'bpjs_ketenagakerjaan']) boolean(employee[key], key, employee);
+      if ((rules.bpjs_kesehatan_eligibility || 'manual') === 'manual' && !employee.bpjs_kesehatan) warning('Employee excluded from bpjs_kesehatan', employee);
+      if ((rules.bpjs_ketenagakerjaan_eligibility || 'manual') === 'manual' && !employee.bpjs_ketenagakerjaan) warning('Employee excluded from bpjs_ketenagakerjaan', employee);
+      if ((rules.bpjs_kesehatan_eligibility || 'manual') === 'tenure' && !/^\d{4}-\d{2}-\d{2}$/.test(employee.join_date || '')) error('Tanggal bergabung wajib untuk aturan masa kerja BPJS Kesehatan.', employee);
+      if ((rules.bpjs_ketenagakerjaan_eligibility || 'manual') === 'permanent') choice(employee.employment_type, ['permanent', 'non_permanent'], 'status permanen BPJS TK', employee);
       if (rules.tax_enabled) {
         choice(employee.tax_category, ['permanent', 'temporary_monthly', 'non_employee'], 'klasifikasi PPh (harian/mingguan/lainnya belum didukung)', employee);
         choice(employee.tax_residency, ['domestic'], 'subjek pajak dalam negeri', employee);
@@ -596,7 +644,7 @@
         if (rules.tax_enabled && policy === 'net') error('Skema net di luar bruto tidak didukung PPh otomatis; pilih gross-up untuk pajak ditanggung perusahaan.', employee);
         if (rules.tax_enabled && employee.tax_category === 'permanent' && String(rules[scenario + '_tax_month']).endsWith('-12')) error('Desember pegawai tetap membutuhkan rekonsiliasi tahunan; di luar simulasi bulan biasa.', employee);
         for (const kind of ['bpjs_kesehatan', 'bpjs_ketenagakerjaan']) {
-          if (C.paymentPolicy(rules, scenario, kind) === 'unconfirmed' && employee[kind] && ws.bpjsRules.some(r => r.active && r.employee_enabled && C.bpjsParticipation(r) === kind)) error('Pilih skema ' + kind + ' ' + scenario + ' pada aturan perhitungan.', employee);
+          if (C.paymentPolicy(rules, scenario, kind) === 'unconfirmed' && C.bpjsEligible(rules, employee, scenario, kind) === true && ws.bpjsRules.some(r => r.active && r.employee_enabled && C.bpjsParticipation(r) === kind)) error('Pilih skema ' + kind + ' ' + scenario + ' pada aturan perhitungan.', employee);
         }
       }
       const resolved = {};
@@ -695,7 +743,7 @@
       if (!rule.active) continue;
       const participation = C.bpjsParticipation(rule);
       if (participation === null) continue; // Unidentified active programs are blocked by validation.
-      if (!employee[participation]) continue;
+      if (!C.bpjsEligible(rules, employee, scenario, participation)) continue;
       const rawBasis = rule.basis === 'basic' ? result.basic_salary : rule.basis === 'gross' ? result.gross :
         sum([result.basic_salary, ...earnings.filter(row => row.definition[participation]).map(row => row.amount)]);
       let basis = rawBasis;
@@ -788,7 +836,7 @@
 (function (C) {
   'use strict';
 
-  const employeeFields = 'employee_id name current_golongan current_matrix_type proposed_matrix_type unit department position employment_status join_date active proposed_golongan current_basic_override proposed_basic_override ptkp_status tax_category tax_residency tax_period_type tax_payment_scope bpjs_kesehatan bpjs_ketenagakerjaan pph_method pph_rate pph_fixed_override notes'.split(' ');
+  const employeeFields = 'employee_id name current_golongan current_matrix_type proposed_matrix_type unit department position employment_status employment_type join_date active proposed_golongan current_basic_override proposed_basic_override ptkp_status tax_category tax_residency tax_period_type tax_payment_scope bpjs_kesehatan bpjs_ketenagakerjaan pph_method pph_rate pph_fixed_override notes'.split(' ');
   const fields = {
     workspace: 'name current_period proposed_period'.split(' '),
     matrix: 'matrix_id name scenario matrix_type effective_date generator_settings'.split(' '),
@@ -797,7 +845,7 @@
     component_definition: 'code name category direction calculation_type default_value taxable bpjs_kesehatan bpjs_ketenagakerjaan applies_current applies_proposed active rounding notes'.split(' '),
     employee_component: 'employee_id component_code current_value proposed_value'.split(' '),
     bpjs_rule: 'code name tax_program employee_rate employer_rate minimum_basis maximum_basis basis employee_enabled employer_enabled rounding active'.split(' '),
-    global_rule: 'currency rounding percentage_precision include_inactive allow_negative_thp proposed_defaults_current proposed_matrix_type_defaults_current tax_enabled tax_basis tax_rounding current_tax_month proposed_tax_month tax_regime'.split(' ').concat(Object.keys(C.paymentPolicies))
+    global_rule: 'currency rounding percentage_precision include_inactive allow_negative_thp proposed_defaults_current proposed_matrix_type_defaults_current tax_enabled tax_basis tax_rounding current_tax_month proposed_tax_month tax_regime bpjs_kesehatan_eligibility bpjs_kesehatan_min_months current_bpjs_reference_date proposed_bpjs_reference_date bpjs_ketenagakerjaan_eligibility'.split(' ').concat(Object.keys(C.paymentPolicies))
   };
   const collections = { matrix: 'matrices', matrix_entry: 'matrixEntries', employee: 'employees', component_definition: 'componentDefinitions', employee_component: 'employeeComponents', bpjs_rule: 'bpjsRules' };
   const workspaceHeaders = ['schema_version', 'record_type', 'record_id', ...new Set(Object.values(fields).flat())];
@@ -806,10 +854,10 @@
   const booleanFields = new Set('active taxable bpjs_kesehatan bpjs_ketenagakerjaan applies_current applies_proposed employee_enabled employer_enabled include_inactive allow_negative_thp proposed_defaults_current proposed_matrix_type_defaults_current tax_enabled'.split(' '));
   const moneyFields = new Set('basic_salary current_basic_override proposed_basic_override pph_fixed_override minimum_basis maximum_basis'.split(' '));
   const numberFields = new Set('default_value current_value proposed_value employee_rate employer_rate pph_rate'.split(' '));
-  const integerFields = new Set(['salary_group', 'kmk_level', 'percentage_precision', 'rounding', 'tax_rounding']);
+  const integerFields = new Set(['salary_group', 'kmk_level', 'percentage_precision', 'rounding', 'tax_rounding', 'bpjs_kesehatan_min_months']);
   const nullableFields = new Set('current_basic_override proposed_basic_override pph_fixed_override minimum_basis maximum_basis current_value proposed_value'.split(' '));
-  const matrixMigration = { matrix_type: 'regular', current_matrix_type: 'regular', proposed_matrix_type: '', proposed_matrix_type_defaults_current: true };
-  const optionalTaxFields = new Set('tax_category tax_residency tax_period_type tax_payment_scope tax_program current_tax_month proposed_tax_month tax_regime'.split(' '));
+  const matrixMigration = { matrix_type: 'regular', current_matrix_type: 'regular', proposed_matrix_type: '', proposed_matrix_type_defaults_current: true, bpjs_kesehatan_eligibility: 'manual', bpjs_kesehatan_min_months: 0, current_bpjs_reference_date: '', proposed_bpjs_reference_date: '', bpjs_ketenagakerjaan_eligibility: 'manual' };
+  const optionalTaxFields = new Set('tax_category tax_residency tax_period_type tax_payment_scope tax_program current_tax_month proposed_tax_month tax_regime employment_type bpjs_kesehatan_eligibility bpjs_kesehatan_min_months current_bpjs_reference_date proposed_bpjs_reference_date bpjs_ketenagakerjaan_eligibility'.split(' '));
   const enums = {
     tax_category: ['permanent', 'temporary_monthly', 'non_employee', 'unsupported'],
     tax_residency: ['domestic', 'foreign'],
@@ -817,6 +865,9 @@
     tax_payment_scope: ['monthly', 'single', 'other'],
     tax_program: ['kesehatan', 'jkk', 'jkm', 'jht', 'jp', 'other'],
     tax_regime: ['ordinary', 'special'],
+    employment_type: ['permanent', 'non_permanent'],
+    bpjs_kesehatan_eligibility: ['manual', 'tenure'],
+    bpjs_ketenagakerjaan_eligibility: ['manual', 'permanent'],
     ...C.paymentPolicies,
     scenario: ['current', 'proposed'],
     direction: ['earning', 'employee_deduction', 'employer_contribution'],
@@ -930,7 +981,7 @@
                 else if (field === 'pph_fixed_override' && ws) rounding = ws.globalRules.tax_rounding;
                 else if (['basic_salary', 'current_basic_override', 'proposed_basic_override'].includes(field) && ws) rounding = ws.globalRules.rounding;
                 record[field] = numeric(raw, field, money, rounding);
-        if (integerFields.has(field) && (!Number.isSafeInteger(record[field]) || record[field] < (field === 'percentage_precision' ? 0 : 1))) fail(`${field} must be a valid integer.`);
+        if (integerFields.has(field) && (!Number.isSafeInteger(record[field]) || record[field] < (['percentage_precision', 'bpjs_kesehatan_min_months'].includes(field) ? 0 : 1))) fail(`${field} must be a valid integer.`);
                 if (['rounding', 'tax_rounding'].includes(field) && ![1, 100, 1000].includes(record[field])) fail(`${field} must be 1, 100, or 1000.`);
                 if (field === 'salary_group') record[field] = String(record[field]);
       } else {
@@ -947,7 +998,7 @@
           record[field] = `${parsed.salary_group}-${parsed.professional_category}${parsed.kmk_level}`;
         }
         if (['current_tax_month', 'proposed_tax_month'].includes(field) && !/^\d{4}-(0[1-9]|1[0-2])$/.test(record[field])) fail(`Invalid YYYY-MM for ${field}.`);
-        if (['join_date', 'effective_date'].includes(field)) {
+        if (['join_date', 'effective_date', 'current_bpjs_reference_date', 'proposed_bpjs_reference_date'].includes(field)) {
           const date = record[field];
           if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(Date.parse(date)) || new Date(date).toISOString().slice(0, 10) !== date) fail(`Invalid ISO date for ${field}.`);
         }
@@ -1063,7 +1114,7 @@
   }
   function exportEmployees(ws) { return stringify(ws.employees.map(r => normalize('employee', r, false, ws)), employeeFields); }
   function employeeDefaults() {
-    return { employee_id: '', name: '', current_golongan: '', current_matrix_type: '', proposed_matrix_type: '', unit: '', department: '', position: '', employment_status: '', join_date: '', active: true, proposed_golongan: '', current_basic_override: '', proposed_basic_override: '', ptkp_status: '', tax_category: '', tax_residency: '', tax_period_type: '', tax_payment_scope: '', bpjs_kesehatan: true, bpjs_ketenagakerjaan: true, pph_method: 'gross_up', pph_rate: '', pph_fixed_override: '', notes: '' };
+    return { employee_id: '', name: '', current_golongan: '', current_matrix_type: '', proposed_matrix_type: '', unit: '', department: '', position: '', employment_status: '', employment_type: '', join_date: '', active: true, proposed_golongan: '', current_basic_override: '', proposed_basic_override: '', ptkp_status: '', tax_category: '', tax_residency: '', tax_period_type: '', tax_payment_scope: '', bpjs_kesehatan: true, bpjs_ketenagakerjaan: true, pph_method: 'gross_up', pph_rate: '', pph_fixed_override: '', notes: '' };
   }
   function preview(ws, operation) {
     const result = { workspace: clone(ws), added: 0, updated: 0, unchanged: 0, rejected: 0, issues: [] };
@@ -1353,10 +1404,10 @@
     metadata: [f('name', 'Nama workspace', 'text', { required: true }), f('current_period', 'Periode saat ini'), f('proposed_period', 'Periode usulan')],
     matrices: [f('matrix_id', 'ID matriks', 'text', { required: true }), f('name', 'Nama matriks', 'text', { required: true }), choice('scenario', 'Skenario', [['current', 'Saat ini'], ['proposed', 'Usulan']], 'current'), f('matrix_type', 'Jenis matriks', 'text', { required: true, help: 'Huruf awal, lalu huruf, angka, _ atau -. Disimpan huruf kecil; contoh regular, admin.' }), f('effective_date', 'Tanggal berlaku', 'date')],
     matrixEntries: [f('matrix_id', 'ID matriks', 'select', { required: true, options: [] }), choice('scenario', 'Skenario', [['current', 'Saat ini'], ['proposed', 'Usulan']], 'current'), f('salary_group', 'Kelompok gaji', 'number', { min: 1, step: 1, required: true }), f('professional_category', 'Kategori profesional', 'text', { required: true, help: 'Contoh: PM, P, M, U. Bukan ditentukan otomatis dari jabatan.' }), f('kmk_level', 'Tingkat KMK', 'number', { min: 1, step: 1, required: true }), f('golongan', 'Golongan (dibuat otomatis)', 'text', { readonly: true }), money('basic_salary', 'Gaji pokok'), f('note', 'Catatan', 'textarea')],
-    employees: [f('employee_id', 'ID karyawan', 'text', { required: true }), f('name', 'Nama karyawan', 'text', { required: true }), f('unit', 'Unit'), f('department', 'Departemen'), f('position', 'Jabatan'), f('employment_status', 'Status kepegawaian'), f('join_date', 'Tanggal bergabung', 'date'), bool('active', 'Karyawan aktif', true), choice('current_matrix_type', 'Jenis matriks saat ini', [['', 'Belum ditetapkan']], ''), choice('proposed_matrix_type', 'Jenis matriks usulan', [['', 'Ikuti jenis saat ini jika aturan aktif']], ''), money('current_basic_override', 'Override gaji pokok saat ini', true), money('proposed_basic_override', 'Override gaji pokok usulan', true), f('current_golongan', 'Golongan saat ini', 'text', { list: 'golongan-list' }), f('proposed_golongan', 'Golongan usulan', 'text', { list: 'golongan-list', help: 'Kosong mengikuti golongan saat ini jika aturan global diaktifkan.' }), choice('ptkp_status', 'Status PTKP terverifikasi', [['', 'Belum diklasifikasikan'], ...['TK/0', 'TK/1', 'TK/2', 'TK/3', 'K/0', 'K/1', 'K/2', 'K/3'].map(value => [value, value])], ''), choice('tax_category', 'Kategori pajak (bukan status kontrak)', [['', 'Belum diklasifikasikan'], ['permanent', 'Pegawai tetap'], ['temporary_monthly', 'Pegawai tidak tetap — dibayar bulanan aktual'], ['non_employee', 'Bukan pegawai — satu imbalan jasa biasa, bruto penuh tanpa pengecualian/sharing'], ['unsupported', 'Lainnya — tidak didukung']], ''), choice('tax_residency', 'Residensi pajak', [['', 'Belum diklasifikasikan'], ['domestic', 'Dalam negeri'], ['foreign', 'Luar negeri — tidak didukung']], ''), choice('tax_period_type', 'Jenis masa pajak', [['', 'Belum diklasifikasikan'], ['ordinary', 'Masa biasa (bukan masa terakhir)'], ['final', 'Masa terakhir — tidak didukung']], ''), choice('tax_payment_scope', 'Cakupan pembayaran pajak', [['', 'Belum diklasifikasikan'], ['monthly', 'Bulanan aktual'], ['single', 'Satu pembayaran jasa biasa — bruto penuh'], ['other', 'Lainnya — tidak didukung']], ''), bool('bpjs_kesehatan', 'Peserta BPJS Kesehatan'), bool('bpjs_ketenagakerjaan', 'Peserta BPJS Ketenagakerjaan'), f('notes', 'Catatan', 'textarea')],
+    employees: [f('employee_id', 'ID karyawan', 'text', { required: true }), f('name', 'Nama karyawan', 'text', { required: true }), f('unit', 'Unit'), f('department', 'Departemen'), f('position', 'Jabatan'), f('employment_status', 'Status kepegawaian (catatan legacy)'), choice('employment_type', 'Status permanen untuk BPJS TK', [['', 'Belum diklasifikasikan'], ['permanent', 'Permanen'], ['non_permanent', 'Tidak permanen']], ''), f('join_date', 'Tanggal bergabung', 'date'), bool('active', 'Karyawan aktif', true), choice('current_matrix_type', 'Jenis matriks saat ini', [['', 'Belum ditetapkan']], ''), choice('proposed_matrix_type', 'Jenis matriks usulan', [['', 'Ikuti jenis saat ini jika aturan aktif']], ''), money('current_basic_override', 'Override gaji pokok saat ini', true), money('proposed_basic_override', 'Override gaji pokok usulan', true), f('current_golongan', 'Golongan saat ini', 'text', { list: 'golongan-list' }), f('proposed_golongan', 'Golongan usulan', 'text', { list: 'golongan-list', help: 'Kosong mengikuti golongan saat ini jika aturan global diaktifkan.' }), choice('ptkp_status', 'Status PTKP terverifikasi', [['', 'Belum diklasifikasikan'], ...['TK/0', 'TK/1', 'TK/2', 'TK/3', 'K/0', 'K/1', 'K/2', 'K/3'].map(value => [value, value])], ''), choice('tax_category', 'Kategori pajak (bukan status kontrak)', [['', 'Belum diklasifikasikan'], ['permanent', 'Pegawai tetap'], ['temporary_monthly', 'Pegawai tidak tetap — dibayar bulanan aktual'], ['non_employee', 'Bukan pegawai — satu imbalan jasa biasa, bruto penuh tanpa pengecualian/sharing'], ['unsupported', 'Lainnya — tidak didukung']], ''), choice('tax_residency', 'Residensi pajak', [['', 'Belum diklasifikasikan'], ['domestic', 'Dalam negeri'], ['foreign', 'Luar negeri — tidak didukung']], ''), choice('tax_period_type', 'Jenis masa pajak', [['', 'Belum diklasifikasikan'], ['ordinary', 'Masa biasa (bukan masa terakhir)'], ['final', 'Masa terakhir — tidak didukung']], ''), choice('tax_payment_scope', 'Cakupan pembayaran pajak', [['', 'Belum diklasifikasikan'], ['monthly', 'Bulanan aktual'], ['single', 'Satu pembayaran jasa biasa — bruto penuh'], ['other', 'Lainnya — tidak didukung']], ''), bool('bpjs_kesehatan', 'Peserta BPJS Kesehatan'), bool('bpjs_ketenagakerjaan', 'Peserta BPJS Ketenagakerjaan'), f('notes', 'Catatan', 'textarea')],
     componentDefinitions: [f('code', 'Kode komponen', 'text', { required: true }), f('name', 'Nama komponen', 'text', { required: true }), f('category', 'Kategori'), choice('direction', 'Arah komponen', [['earning', 'Pendapatan'], ['employee_deduction', 'Potongan karyawan'], ['employer_contribution', 'Kontribusi pemberi kerja']], 'earning'), choice('calculation_type', 'Jenis perhitungan', [['fixed', 'Nominal tetap'], ['percentage_basic', 'Persentase gaji pokok'], ['percentage_gross', 'Persentase bruto sebelum pajak'], ['manual', 'Nominal manual']], 'fixed'), f('default_value', 'Nilai default', 'number', { step: 'any', default: 0, help: 'Rp untuk nominal; persen untuk jenis persentase (9 berarti 9%).' }), bool('taxable', 'Termasuk basis pajak'), bool('bpjs_kesehatan', 'Termasuk basis BPJS Kesehatan'), bool('bpjs_ketenagakerjaan', 'Termasuk basis BPJS Ketenagakerjaan'), bool('applies_current', 'Berlaku saat ini', true), bool('applies_proposed', 'Berlaku pada usulan', true), bool('active', 'Komponen aktif', true), rounding(), f('notes', 'Catatan', 'textarea')],
     bpjsRules: [choice('tax_program', 'Identifikasi program untuk pajak', [['', 'Belum diidentifikasi'], ...['kesehatan', 'jkk', 'jkm', 'jht', 'jp', 'other'].map(value => [value, value])], ''), f('code', 'Kode program', 'text', { required: true, help: 'Kode bebas; identifikasi program pajak secara terpisah, jangan menebak dari kode.' }), f('name', 'Nama program', 'text', { required: true }), rate('employee_rate', 'Tarif karyawan'), rate('employer_rate', 'Tarif pemberi kerja'), money('minimum_basis', 'Batas minimum basis', true), money('maximum_basis', 'Batas maksimum basis', true), choice('basis', 'Dasar perhitungan', [['basic', 'Gaji pokok'], ['selected', 'Pokok + komponen terpilih'], ['gross', 'Pendapatan bruto']], 'basic'), bool('employee_enabled', 'Aktifkan kontribusi karyawan', true), bool('employer_enabled', 'Aktifkan kontribusi pemberi kerja', true), rounding(), bool('active', 'Program aktif', true)],
-    globalRules: [choice('currency', 'Mata uang', [['IDR', 'Rupiah (IDR)']], 'IDR'), rounding(), choice('percentage_precision', 'Presisi tampilan persen', [[2, '2 angka desimal']], 2), bool('include_inactive', 'Sertakan karyawan nonaktif'), bool('allow_negative_thp', 'Izinkan take-home pay negatif'), bool('proposed_defaults_current', 'Golongan usulan kosong mengikuti saat ini', true), bool('proposed_matrix_type_defaults_current', 'Jenis matriks usulan kosong mengikuti saat ini (terpisah dari golongan)', true), bool('tax_enabled', 'Aktifkan PPh 21 otomatis'), f('current_tax_month', 'Bulan pajak saat ini (YYYY-MM)', 'month'), f('proposed_tax_month', 'Bulan pajak usulan (YYYY-MM)', 'month'), choice('tax_regime', 'Konfirmasi rezim pajak', [['', 'Belum dikonfirmasi — wajib saat pajak aktif'], ['ordinary', 'Biasa — saya konfirmasi tanpa DTP/insentif khusus'], ['special', 'Khusus / DTP — tidak didukung']], '')]
+    globalRules: [choice('currency', 'Mata uang', [['IDR', 'Rupiah (IDR)']], 'IDR'), rounding(), choice('percentage_precision', 'Presisi tampilan persen', [[2, '2 angka desimal']], 2), bool('include_inactive', 'Sertakan karyawan nonaktif'), bool('allow_negative_thp', 'Izinkan take-home pay negatif'), bool('proposed_defaults_current', 'Golongan usulan kosong mengikuti saat ini', true), bool('proposed_matrix_type_defaults_current', 'Jenis matriks usulan kosong mengikuti saat ini (terpisah dari golongan)', true), choice('bpjs_kesehatan_eligibility', 'Kepesertaan BPJS Kesehatan', [['manual', 'Manual per karyawan'], ['tenure', 'Otomatis berdasarkan lama kerja']], 'manual'), f('bpjs_kesehatan_min_months', 'Minimum lama kerja BPJS Kesehatan (bulan)', 'number', { min: 0, step: 1, default: 0 }), f('current_bpjs_reference_date', 'Tanggal acuan BPJS saat ini', 'date', { optional: true, help: 'Wajib saat aturan lama kerja aktif.' }), f('proposed_bpjs_reference_date', 'Tanggal acuan BPJS usulan', 'date', { optional: true, help: 'Wajib saat aturan lama kerja aktif.' }), choice('bpjs_ketenagakerjaan_eligibility', 'Kepesertaan BPJS TK', [['manual', 'Manual per karyawan'], ['permanent', 'Hanya karyawan permanen']], 'manual'), bool('tax_enabled', 'Aktifkan PPh 21 otomatis'), f('current_tax_month', 'Bulan pajak saat ini (YYYY-MM)', 'month'), f('proposed_tax_month', 'Bulan pajak usulan (YYYY-MM)', 'month'), choice('tax_regime', 'Konfirmasi rezim pajak', [['', 'Belum dikonfirmasi — wajib saat pajak aktif'], ['ordinary', 'Biasa — saya konfirmasi tanpa DTP/insentif khusus'], ['special', 'Khusus / DTP — tidak didukung']], '')]
   };
   const policyOptions = {
     pph: [['unconfirmed', 'Belum dikonfirmasi'], ['gross', 'Gross — dipotong dari THP'], ['net', 'Net legacy — tidak didukung; gunakan gross_up'], ['gross_up', 'Gross-up — tunjangan masuk bruto']],
@@ -1578,7 +1629,7 @@
       issues.length ? U.table(['Masalah', 'Perbaiki'], issues.map(issue => [U.issues([issue]), repair(issue)])) : h('p', {}, 'Tidak ada masalah.')));
   }
   function renderEmployees(main) {
-    main.append(U.heading(...sections.employees, U.button('Impor CSV', 'import', { kind: 'employees' }), U.button('Ekspor CSV', 'export-employees'), U.button('Tambah karyawan', 'edit', { collection: 'employees' }, 'primary')), employeeFilters());
+    main.append(U.heading(...sections.employees, U.button('Impor CSV', 'import', { kind: 'employees' }), U.button('Ekspor CSV', 'export-employees'), U.button('Normalisasi semua override gaji', 'normalize-basic-overrides'), U.button('Tambah karyawan', 'edit', { collection: 'employees' }, 'primary')), employeeFilters());
     const employees = filteredEmployees();
     main.append(h('div', { class: 'panel-head' }, h('span', { class: 'muted' }, employees.length + ' dari ' + rows('employees').length + ' karyawan'), U.actions(U.button('Tetapkan jenis matriks untuk hasil filter', 'bulk-matrix-type', {}, 'small'), U.button('Samakan golongan usulan (hasil filter)', 'equal-golongan', {}, 'small'))));
     main.append(U.table(['ID / Nama', 'Unit / Departemen', 'Jabatan', 'Status', 'Golongan saat ini', 'Golongan usulan', 'Pokok saat ini', 'Pokok usulan', 'Validasi', 'Tindakan'], employees.map(e => [h('div', {}, h('strong', {}, e.name), h('div', { class: 'muted' }, e.employee_id)), h('div', {}, e.unit || '—', h('div', { class: 'muted' }, e.department || '—')), e.position || '—', U.badge(e.active ? 'Aktif' : 'Nonaktif'), h('div', {}, e.current_golongan || '—', h('small', {}, ' · Jenis: ' + (C.resolveMatrixType(ws(), e, 'current') || e.current_matrix_type || 'Belum ditetapkan'))), h('div', {}, e.proposed_golongan || (ws().globalRules.proposed_defaults_current ? e.current_golongan + ' (default)' : '—'), h('small', {}, ' · Jenis: ' + (C.resolveMatrixType(ws(), e, 'proposed') || e.proposed_matrix_type || 'Belum ditetapkan') + (!e.proposed_matrix_type && ws().globalRules.proposed_matrix_type_defaults_current ? ' (ikuti saat ini)' : ''))), basicCell(e, 'current'), basicCell(e, 'proposed'), validationCount(employeeIssues(e), { index: rows('employees').indexOf(e) }), h('button', { type: 'button', class: 'small', 'data-action': 'employee-actions', 'data-index': rows('employees').indexOf(e), 'aria-haspopup': 'dialog', 'aria-label': 'Tindakan · ' + e.employee_id + ' · ' + e.name, title: 'Tindakan karyawan' }, '…')])));
@@ -1602,10 +1653,14 @@
   }
   function renderRules(main) {
     main.append(U.heading(...sections.rules, U.button('Edit aturan global & pajak', 'edit-rules', {}, 'primary')));
-    main.append(U.notice('PPh 21 otomatis terbatas pada orang pribadi dalam negeri, rezim biasa 2024–2026 tanpa DTP/insentif khusus. Pegawai tetap: masa nonfinal selain Desember; tidak tetap: pembayaran bulanan aktual; bukan pegawai: satu imbalan jasa biasa bruto penuh tanpa pengecualian/sharing. Tidak mendukung rekonsiliasi tahunan, harian/mingguan, luar negeri, atau net legacy (gunakan gross_up). Pembulatan pajak ke bawah rupiah penuh adalah asumsi simulasi, bukan klaim kepatuhan pajak lengkap. Verifikasi tarif dan batas BPJS.'));
+    main.append(U.notice('Aturan kepesertaan BPJS dapat tetap manual atau dihitung global: Kesehatan berdasarkan lama kerja terhadap tanggal acuan tiap skenario, dan TK hanya untuk status permanen terstruktur. PPh 21 otomatis terbatas pada orang pribadi dalam negeri, rezim biasa 2024–2026 tanpa DTP/insentif khusus. Verifikasi seluruh kebijakan, tarif, dan batas BPJS.'));
     main.append(U.panel('Skema pembayaran PPh & BPJS', U.object(Object.fromEntries(U.schemas.paymentPolicies.map(s => [s.label, s.options.find(([value]) => value === (ws().globalRules[s.key] || s.default))?.[1] || 'Tidak valid']))), U.button('Atur skema pembayaran', 'edit-payment-policies', {}, 'primary')));
     main.append(U.panel('Aturan BPJS', U.table(['Program', 'Tarif karyawan', 'Tarif pemberi kerja', 'Minimum basis', 'Maksimum basis', 'Basis', 'Status', 'Tindakan'], rows('bpjsRules').map((r, index) => [r.name + ' (' + r.code + ') · pajak: ' + (r.tax_program || 'belum diidentifikasi'), U.rateDisplay(r.employee_rate) + (r.employee_enabled ? '' : ' · nonaktif'), U.rateDisplay(r.employer_rate) + (r.employer_enabled ? '' : ' · nonaktif'), r.minimum_basis === '' || r.minimum_basis == null ? 'Tanpa batas' : U.amount(r.minimum_basis), r.maximum_basis === '' || r.maximum_basis == null ? 'Tanpa batas' : U.amount(r.maximum_basis), { basic: 'Gaji pokok', selected: 'Pokok + terpilih', gross: 'Bruto' }[r.basis] || r.basis, U.badge(r.active ? 'Aktif' : 'Nonaktif'), controls('edit', index, 'bpjsRules')])), U.button('Tambah program', 'edit', { collection: 'bpjsRules' }, 'small')));
-    main.append(h('div', { class: 'two-column' }, U.panel('Aturan global', U.object(Object.fromEntries(U.schemas.globalRules.filter(s => !s.key.includes('tax_')).map(s => [s.label, ws().globalRules[s.key]])))), U.panel('PPh 21 otomatis', h('div', {}, U.object(Object.fromEntries(U.schemas.globalRules.filter(s => s.key.includes('tax_')).map(s => [s.label, ws().globalRules[s.key]]))), h('p', { class: 'muted' }, 'Skema PPh dan BPJS ditetapkan terpisah untuk saat ini/usulan pada pengaturan skema pembayaran. Basis iuran tetap sebelum tunjangan BPJS/PPh. Pilih PTKP dan klasifikasi pajak terverifikasi pada karyawan, bulan pajak dan konfirmasi rezim biasa di aturan global, serta tax_program pada BPJS aktif. Nilai tarif, override, basis, dan pembulatan pajak legacy hanya arsip, tidak dipakai.'), U.button('Kelola pengaturan karyawan', 'navigate', { section: 'employees' })))));
+    const globalSettings = U.schemas.globalRules.filter(s => !s.key.includes('tax_') && !s.key.includes('bpjs_'));
+    const bpjsSettings = U.schemas.globalRules.filter(s => s.key.includes('bpjs_'));
+    const taxSettings = U.schemas.globalRules.filter(s => s.key.includes('tax_'));
+    main.append(U.panel('Kepesertaan BPJS', U.object(Object.fromEntries(bpjsSettings.map(s => [s.label, ws().globalRules[s.key]]))), U.button('Edit aturan kepesertaan', 'edit-rules', {}, 'small')));
+    main.append(h('div', { class: 'two-column' }, U.panel('Aturan global', U.object(Object.fromEntries(globalSettings.map(s => [s.label, ws().globalRules[s.key]])))), U.panel('PPh 21 otomatis', h('div', {}, U.object(Object.fromEntries(taxSettings.map(s => [s.label, ws().globalRules[s.key]]))), h('p', { class: 'muted' }, 'Skema PPh dan BPJS ditetapkan terpisah untuk saat ini/usulan pada pengaturan skema pembayaran. Basis iuran tetap sebelum tunjangan BPJS/PPh. Pilih PTKP dan klasifikasi pajak terverifikasi pada karyawan, bulan pajak dan konfirmasi rezim biasa di aturan global, serta tax_program pada BPJS aktif. Nilai tarif, override, basis, dan pembulatan pajak legacy hanya arsip, tidak dipakai.'), U.button('Kelola pengaturan karyawan', 'navigate', { section: 'employees' })))));
   }
   const metricKeys = ['basic_salary', 'gross', 'employee_bpjs', 'employer_bpjs', 'pph', 'deductions', 'take_home_pay', 'employer_contributions', 'bpjs_allowance', 'tax_allowance', 'employer_tax_cost', 'employer_cost'];
   function resultEmployees(result) {
@@ -2067,7 +2122,7 @@
     sample: () => U.confirm('Coba data contoh fiktif?', h('p', {}, dirtyWarning() + 'Data layar akan diganti dengan demo fiktif. Semua nama, gaji, tarif, dan batas hanya ilustrasi; jangan gunakan sebagai aturan hukum.'), () => replace(C.sampleWorkspace(), false, '', true), 'Muat demo fiktif'),
     reset: () => U.confirm('Hapus semua data dari layar?', h('p', {}, dirtyWarning() + 'Seluruh data dalam memori akan dihapus. File CSV yang sudah diunduh tidak dihapus dari komputer.'), () => { replace(null, true); U.toast('Semua data di layar telah dihapus.'); }, 'Hapus data layar'),
     'edit-metadata': () => { if (requireWorkspace()) U.form('Informasi workspace', U.schemas.metadata, ws().metadata, data => { mutate(w => { w.metadata = data; }); U.close(); }); },
-    'edit-rules': () => U.form('Aturan global & estimasi PPh 21', U.schemas.globalRules, ws().globalRules, data => { mutate(w => { w.globalRules = { ...w.globalRules, ...data }; }); U.close(); }, U.notice('Pengaturan PPh ini hanya estimasi bulanan. Tarif dan status PTKP diatur per karyawan; validasikan bersama ahli payroll/pajak.')),
+    'edit-rules': () => U.form('Aturan global, BPJS & estimasi PPh 21', U.schemas.globalRules, ws().globalRules, data => { mutate(w => { w.globalRules = { ...w.globalRules, ...data }; }); U.close(); }, U.notice('Aturan otomatis BPJS Kesehatan memerlukan tanggal bergabung dan tanggal acuan tiap skenario. Aturan BPJS TK permanen memerlukan status permanen terstruktur pada setiap karyawan. Checkbox BPJS per karyawan tetap dipakai hanya dalam mode manual.')),
     'edit-payment-policies': () => U.form('Skema pembayaran · saat ini & usulan', U.schemas.paymentPolicies, ws().globalRules, data => {
       U.confirm('Terapkan skema pembayaran?', h('div', {}, U.notice('Hasil simulasi akan dihitung ulang. Skema ini berlaku untuk seluruh karyawan pada masing-masing skenario.'), U.object(Object.fromEntries(U.schemas.paymentPolicies.map(s => [s.label, s.options.find(([value]) => value === data[s.key])[1]])))), () => { mutate(w => { Object.assign(w.globalRules, data); }); U.close(); }, 'Terapkan skema');
     }, U.notice('PPh: gross mengurangi THP; net dibayar perusahaan di luar bruto; gross-up memberi tunjangan pajak di bruto. BPJS: pilih apakah porsi karyawan dipotong dari THP atau ditutup tunjangan perusahaan. Porsi perusahaan tetap terpisah. Belum dikonfirmasi menghalangi perhitungan terkait. Aktifkan estimasi PPh pada aturan global jika diperlukan.')),
@@ -2076,6 +2131,16 @@
     delete: data => deleteRecord(data.collection, data.index),
     assign: data => assign(data.index),
     'copy-matrix': copyMatrix,
+    'normalize-basic-overrides': () => {
+      const candidate = clone(ws());
+      const changes = C.normalizeBasicOverrides(candidate);
+      if (!changes.length) { U.toast('Tidak ada override yang dapat dinormalisasi; pastikan golongan dan matriksnya tersedia.'); return; }
+      const different = changes.filter(change => change.differs).length;
+      U.confirm('Normalisasi semua override gaji?', h('div', {}, U.notice(changes.length + ' override akan dikosongkan agar kembali mengikuti matriks; ' + different + ' di antaranya saat ini berbeda dari matriks.'), U.table(['Karyawan', 'Skenario', 'Override', 'Matriks'], changes.map(change => [change.employee_id, change.scenario === 'current' ? 'Saat ini' : 'Usulan', U.amount(change.from), U.amount(change.to)]))), () => {
+        mutate(w => { C.normalizeBasicOverrides(w); });
+        U.close(); U.toast(changes.length + ' override gaji dinormalisasi ke matriks.');
+      }, 'Normalisasi override');
+    },
     'bulk-matrix-type': () => {
       const indexes = filteredEmployees().map(e => rows('employees').indexOf(e));
       if (!indexes.length) { U.toast('Tidak ada karyawan dalam hasil filter.'); return; }

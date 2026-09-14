@@ -121,6 +121,57 @@ test('explicit overrides affect payroll while duplicate entries still block', ()
   ws.matrices = [];
   blocked(ws, /Unresolved current matrix type/);
 });
+test('normalizing salary overrides clears every resolvable override and preserves unresolved ones', () => {
+  const ws = workspace();
+  ws.employees[0].current_basic_override = 9999;
+  ws.employees[0].proposed_basic_override = 12000;
+  const changes = C.normalizeBasicOverrides(ws);
+  assert.equal(changes.length, 2);
+  assert.equal(changes.filter(change => change.differs).length, 1);
+  assert.equal(ws.employees[0].current_basic_override, '');
+  assert.equal(ws.employees[0].proposed_basic_override, '');
+  assert.equal(C.resolveBasic(ws, ws.employees[0], 'current'), 10000);
+  ws.employees[0].current_basic_override = 7777;
+  ws.matrixEntries = ws.matrixEntries.filter(entry => entry.scenario !== 'current');
+  assert.deepEqual(C.normalizeBasicOverrides(ws), []);
+  assert.equal(ws.employees[0].current_basic_override, 7777);
+});
+
+test('BPJS health minimum tenure is required only when tenure eligibility is active', () => {
+  const ws = workspace();
+  delete ws.globalRules.bpjs_kesehatan_min_months;
+  assert.ok(!C.validate(ws).some(issue => /masa kerja minimum BPJS Kesehatan/.test(issue.message)));
+  Object.assign(ws.globalRules, {
+    bpjs_kesehatan_eligibility: 'tenure',
+    current_bpjs_reference_date: '2026-08-31', proposed_bpjs_reference_date: '2027-08-31'
+  });
+  assert.ok(C.validate(ws).some(issue => issue.severity === 'error' && /masa kerja minimum BPJS Kesehatan/.test(issue.message)));
+});
+
+test('global BPJS eligibility uses exact tenure dates and permanent status per scenario', () => {
+  const ws = workspace(10000, 10000);
+  const employee = ws.employees[0];
+  employee.join_date = '2026-01-31';
+  employee.employment_type = 'non_permanent';
+  Object.assign(ws.globalRules, {
+    bpjs_kesehatan_eligibility: 'tenure', bpjs_kesehatan_min_months: 1,
+    current_bpjs_reference_date: '2026-02-28', proposed_bpjs_reference_date: '2026-03-01',
+    bpjs_ketenagakerjaan_eligibility: 'permanent'
+  });
+  assert.equal(C.bpjsEligible(ws.globalRules, employee, 'current', 'bpjs_kesehatan'), false);
+  assert.equal(C.bpjsEligible(ws.globalRules, employee, 'proposed', 'bpjs_kesehatan'), true);
+  assert.equal(C.bpjsEligible(ws.globalRules, employee, 'current', 'bpjs_ketenagakerjaan'), false);
+  bpjs(ws);
+  bpjs(ws, { code: 'JHT' });
+  const output = result(ws).employees[0];
+  assert.equal(output.current.employee_bpjs, 0);
+  assert.equal(output.proposed.employee_bpjs, 100);
+  employee.employment_type = 'permanent';
+  const permanent = result(ws).employees[0];
+  assert.equal(permanent.current.employee_bpjs, 100);
+  assert.equal(permanent.proposed.employee_bpjs, 200);
+});
+
 test('matrix adjustments round the final salary exactly and do not mutate', () => {
   const entries = [{ basic_salary: 1050, note: 'keep' }];
   assert.deepEqual(C.adjustMatrix(entries, '0.1', 100), [{ basic_salary: 1200, note: 'keep' }]);

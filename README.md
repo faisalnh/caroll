@@ -18,7 +18,9 @@ Matriks memiliki jenis wajib: `regular` dan `admin` sebagai jenis awal, serta je
 
 Karyawan aktif memerlukan `current_matrix_type`; `proposed_matrix_type` opsional mengikuti jenis saat ini hanya jika `proposed_matrix_type_defaults_current` aktif (default true), terpisah dari fallback golongan. Form memakai pilihan berantai jenis → KG → profesional → KMK; penetapan jenis massal pada hasil filter perlu konfirmasi dan mempertahankan golongan/override. Runtime tidak menebak klasifikasi dari nama, jabatan, atau nominal.
 
-**Override gaji pokok eksplisit dipulihkan atas permintaan pengguna**: `current_basic_override` / `proposed_basic_override` nonblank, termasuk nol, mendahului matriks dan memunculkan peringatan; kosong kembali ke matriks. Override tidak melewati kewajiban jenis/induk valid. Ini bukan pemulihan override pajak manual; PPh tetap otomatis. CSV lama tanpa header jenis dimigrasikan ke regular/regular/kosong/true untuk induk/jenis saat ini/jenis usulan/aturan fallback; `matrix_type` yang eksplisit kosong ditolak. Lihat [format CSV](docs/CSV_FORMAT.md) untuk migrasi dan cakupan kolom.
+**Override gaji pokok eksplisit dipulihkan atas permintaan pengguna**: `current_basic_override` / `proposed_basic_override` nonblank, termasuk nol, mendahului matriks dan memunculkan peringatan; kosong kembali ke matriks. Tombol normalisasi massal mengosongkan override yang memiliki sel matriks valid setelah pratinjau/konfirmasi. Override tidak melewati kewajiban jenis/induk valid. Ini bukan pemulihan override pajak manual; PPh tetap otomatis. CSV lama tanpa header jenis dimigrasikan ke regular/regular/kosong/true untuk induk/jenis saat ini/jenis usulan/aturan fallback; `matrix_type` yang eksplisit kosong ditolak. Lihat [format CSV](docs/CSV_FORMAT.md) untuk migrasi dan cakupan kolom.
+
+Kepesertaan BPJS dapat tetap manual per karyawan atau memakai aturan global. BPJS Kesehatan dapat aktif setelah minimum bulan kerja terhadap tanggal acuan masing-masing skenario; BPJS TK dapat dibatasi hanya untuk `employment_type=permanent`. Mode otomatis tidak menebak dari teks status lama maupun klasifikasi pajak.
 
 ## Membuat file uji tunggal
 

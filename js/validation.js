@@ -55,6 +55,15 @@
     if (rules.percentage_precision !== 2) error('Percentage precision must be 2');
     for (const key of ['include_inactive', 'allow_negative_thp', 'proposed_defaults_current', 'proposed_matrix_type_defaults_current', 'tax_enabled']) boolean(rules[key], key);
     choice(rules.tax_basis, ['taxable', 'gross', 'basic'], 'tax basis');
+    choice(rules.bpjs_kesehatan_eligibility || 'manual', ['manual', 'tenure'], 'aturan kepesertaan BPJS Kesehatan');
+    choice(rules.bpjs_ketenagakerjaan_eligibility || 'manual', ['manual', 'permanent'], 'aturan kepesertaan BPJS TK');
+    if ((rules.bpjs_kesehatan_eligibility || 'manual') === 'tenure') {
+      numeric(rules.bpjs_kesehatan_min_months, 'masa kerja minimum BPJS Kesehatan', null, false, true, true);
+      for (const scenario of ['current', 'proposed']) {
+        const date = rules[scenario + '_bpjs_reference_date'];
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '') || !Number.isFinite(Date.parse(date)) || new Date(date).toISOString().slice(0, 10) !== date) error('Isi tanggal acuan BPJS ' + scenario + ' (YYYY-MM-DD).');
+      }
+    }
     for (const [key, options] of Object.entries(C.paymentPolicies)) if (!blank(rules[key])) choice(rules[key], options, key);
     if (!rules.tax_enabled) warning('Estimasi PPh 21 is disabled; results exclude tax');
     if (rules.tax_enabled) {
@@ -120,10 +129,11 @@
       if (blank(employee.name) || !String(employee.name).trim()) error('Missing employee name', employee);
       if (!employee.current_golongan) error('Missing current Golongan', employee);
       if (!C.normalizeMatrixType(employee.current_matrix_type)) error('Invalid or missing current_matrix_type', employee);
-      for (const key of ['bpjs_kesehatan', 'bpjs_ketenagakerjaan']) {
-        boolean(employee[key], key, employee);
-        if (!employee[key]) warning('Employee excluded from ' + key, employee);
-      }
+      for (const key of ['bpjs_kesehatan', 'bpjs_ketenagakerjaan']) boolean(employee[key], key, employee);
+      if ((rules.bpjs_kesehatan_eligibility || 'manual') === 'manual' && !employee.bpjs_kesehatan) warning('Employee excluded from bpjs_kesehatan', employee);
+      if ((rules.bpjs_ketenagakerjaan_eligibility || 'manual') === 'manual' && !employee.bpjs_ketenagakerjaan) warning('Employee excluded from bpjs_ketenagakerjaan', employee);
+      if ((rules.bpjs_kesehatan_eligibility || 'manual') === 'tenure' && !/^\d{4}-\d{2}-\d{2}$/.test(employee.join_date || '')) error('Tanggal bergabung wajib untuk aturan masa kerja BPJS Kesehatan.', employee);
+      if ((rules.bpjs_ketenagakerjaan_eligibility || 'manual') === 'permanent') choice(employee.employment_type, ['permanent', 'non_permanent'], 'status permanen BPJS TK', employee);
       if (rules.tax_enabled) {
         choice(employee.tax_category, ['permanent', 'temporary_monthly', 'non_employee'], 'klasifikasi PPh (harian/mingguan/lainnya belum didukung)', employee);
         choice(employee.tax_residency, ['domestic'], 'subjek pajak dalam negeri', employee);
@@ -138,7 +148,7 @@
         if (rules.tax_enabled && policy === 'net') error('Skema net di luar bruto tidak didukung PPh otomatis; pilih gross-up untuk pajak ditanggung perusahaan.', employee);
         if (rules.tax_enabled && employee.tax_category === 'permanent' && String(rules[scenario + '_tax_month']).endsWith('-12')) error('Desember pegawai tetap membutuhkan rekonsiliasi tahunan; di luar simulasi bulan biasa.', employee);
         for (const kind of ['bpjs_kesehatan', 'bpjs_ketenagakerjaan']) {
-          if (C.paymentPolicy(rules, scenario, kind) === 'unconfirmed' && employee[kind] && ws.bpjsRules.some(r => r.active && r.employee_enabled && C.bpjsParticipation(r) === kind)) error('Pilih skema ' + kind + ' ' + scenario + ' pada aturan perhitungan.', employee);
+          if (C.paymentPolicy(rules, scenario, kind) === 'unconfirmed' && C.bpjsEligible(rules, employee, scenario, kind) === true && ws.bpjsRules.some(r => r.active && r.employee_enabled && C.bpjsParticipation(r) === kind)) error('Pilih skema ' + kind + ' ' + scenario + ' pada aturan perhitungan.', employee);
         }
       }
       const resolved = {};

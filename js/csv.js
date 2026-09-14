@@ -2,7 +2,7 @@
 (function (C) {
   'use strict';
 
-  const employeeFields = 'employee_id name current_golongan current_matrix_type proposed_matrix_type unit department position employment_status join_date active proposed_golongan current_basic_override proposed_basic_override ptkp_status tax_category tax_residency tax_period_type tax_payment_scope bpjs_kesehatan bpjs_ketenagakerjaan pph_method pph_rate pph_fixed_override notes'.split(' ');
+  const employeeFields = 'employee_id name current_golongan current_matrix_type proposed_matrix_type unit department position employment_status employment_type join_date active proposed_golongan current_basic_override proposed_basic_override ptkp_status tax_category tax_residency tax_period_type tax_payment_scope bpjs_kesehatan bpjs_ketenagakerjaan pph_method pph_rate pph_fixed_override notes'.split(' ');
   const fields = {
     workspace: 'name current_period proposed_period'.split(' '),
     matrix: 'matrix_id name scenario matrix_type effective_date generator_settings'.split(' '),
@@ -11,7 +11,7 @@
     component_definition: 'code name category direction calculation_type default_value taxable bpjs_kesehatan bpjs_ketenagakerjaan applies_current applies_proposed active rounding notes'.split(' '),
     employee_component: 'employee_id component_code current_value proposed_value'.split(' '),
     bpjs_rule: 'code name tax_program employee_rate employer_rate minimum_basis maximum_basis basis employee_enabled employer_enabled rounding active'.split(' '),
-    global_rule: 'currency rounding percentage_precision include_inactive allow_negative_thp proposed_defaults_current proposed_matrix_type_defaults_current tax_enabled tax_basis tax_rounding current_tax_month proposed_tax_month tax_regime'.split(' ').concat(Object.keys(C.paymentPolicies))
+    global_rule: 'currency rounding percentage_precision include_inactive allow_negative_thp proposed_defaults_current proposed_matrix_type_defaults_current tax_enabled tax_basis tax_rounding current_tax_month proposed_tax_month tax_regime bpjs_kesehatan_eligibility bpjs_kesehatan_min_months current_bpjs_reference_date proposed_bpjs_reference_date bpjs_ketenagakerjaan_eligibility'.split(' ').concat(Object.keys(C.paymentPolicies))
   };
   const collections = { matrix: 'matrices', matrix_entry: 'matrixEntries', employee: 'employees', component_definition: 'componentDefinitions', employee_component: 'employeeComponents', bpjs_rule: 'bpjsRules' };
   const workspaceHeaders = ['schema_version', 'record_type', 'record_id', ...new Set(Object.values(fields).flat())];
@@ -20,10 +20,10 @@
   const booleanFields = new Set('active taxable bpjs_kesehatan bpjs_ketenagakerjaan applies_current applies_proposed employee_enabled employer_enabled include_inactive allow_negative_thp proposed_defaults_current proposed_matrix_type_defaults_current tax_enabled'.split(' '));
   const moneyFields = new Set('basic_salary current_basic_override proposed_basic_override pph_fixed_override minimum_basis maximum_basis'.split(' '));
   const numberFields = new Set('default_value current_value proposed_value employee_rate employer_rate pph_rate'.split(' '));
-  const integerFields = new Set(['salary_group', 'kmk_level', 'percentage_precision', 'rounding', 'tax_rounding']);
+  const integerFields = new Set(['salary_group', 'kmk_level', 'percentage_precision', 'rounding', 'tax_rounding', 'bpjs_kesehatan_min_months']);
   const nullableFields = new Set('current_basic_override proposed_basic_override pph_fixed_override minimum_basis maximum_basis current_value proposed_value'.split(' '));
-  const matrixMigration = { matrix_type: 'regular', current_matrix_type: 'regular', proposed_matrix_type: '', proposed_matrix_type_defaults_current: true };
-  const optionalTaxFields = new Set('tax_category tax_residency tax_period_type tax_payment_scope tax_program current_tax_month proposed_tax_month tax_regime'.split(' '));
+  const matrixMigration = { matrix_type: 'regular', current_matrix_type: 'regular', proposed_matrix_type: '', proposed_matrix_type_defaults_current: true, bpjs_kesehatan_eligibility: 'manual', bpjs_kesehatan_min_months: 0, current_bpjs_reference_date: '', proposed_bpjs_reference_date: '', bpjs_ketenagakerjaan_eligibility: 'manual' };
+  const optionalTaxFields = new Set('tax_category tax_residency tax_period_type tax_payment_scope tax_program current_tax_month proposed_tax_month tax_regime employment_type bpjs_kesehatan_eligibility bpjs_kesehatan_min_months current_bpjs_reference_date proposed_bpjs_reference_date bpjs_ketenagakerjaan_eligibility'.split(' '));
   const enums = {
     tax_category: ['permanent', 'temporary_monthly', 'non_employee', 'unsupported'],
     tax_residency: ['domestic', 'foreign'],
@@ -31,6 +31,9 @@
     tax_payment_scope: ['monthly', 'single', 'other'],
     tax_program: ['kesehatan', 'jkk', 'jkm', 'jht', 'jp', 'other'],
     tax_regime: ['ordinary', 'special'],
+    employment_type: ['permanent', 'non_permanent'],
+    bpjs_kesehatan_eligibility: ['manual', 'tenure'],
+    bpjs_ketenagakerjaan_eligibility: ['manual', 'permanent'],
     ...C.paymentPolicies,
     scenario: ['current', 'proposed'],
     direction: ['earning', 'employee_deduction', 'employer_contribution'],
@@ -144,7 +147,7 @@
                 else if (field === 'pph_fixed_override' && ws) rounding = ws.globalRules.tax_rounding;
                 else if (['basic_salary', 'current_basic_override', 'proposed_basic_override'].includes(field) && ws) rounding = ws.globalRules.rounding;
                 record[field] = numeric(raw, field, money, rounding);
-        if (integerFields.has(field) && (!Number.isSafeInteger(record[field]) || record[field] < (field === 'percentage_precision' ? 0 : 1))) fail(`${field} must be a valid integer.`);
+        if (integerFields.has(field) && (!Number.isSafeInteger(record[field]) || record[field] < (['percentage_precision', 'bpjs_kesehatan_min_months'].includes(field) ? 0 : 1))) fail(`${field} must be a valid integer.`);
                 if (['rounding', 'tax_rounding'].includes(field) && ![1, 100, 1000].includes(record[field])) fail(`${field} must be 1, 100, or 1000.`);
                 if (field === 'salary_group') record[field] = String(record[field]);
       } else {
@@ -161,7 +164,7 @@
           record[field] = `${parsed.salary_group}-${parsed.professional_category}${parsed.kmk_level}`;
         }
         if (['current_tax_month', 'proposed_tax_month'].includes(field) && !/^\d{4}-(0[1-9]|1[0-2])$/.test(record[field])) fail(`Invalid YYYY-MM for ${field}.`);
-        if (['join_date', 'effective_date'].includes(field)) {
+        if (['join_date', 'effective_date', 'current_bpjs_reference_date', 'proposed_bpjs_reference_date'].includes(field)) {
           const date = record[field];
           if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(Date.parse(date)) || new Date(date).toISOString().slice(0, 10) !== date) fail(`Invalid ISO date for ${field}.`);
         }
@@ -277,7 +280,7 @@
   }
   function exportEmployees(ws) { return stringify(ws.employees.map(r => normalize('employee', r, false, ws)), employeeFields); }
   function employeeDefaults() {
-    return { employee_id: '', name: '', current_golongan: '', current_matrix_type: '', proposed_matrix_type: '', unit: '', department: '', position: '', employment_status: '', join_date: '', active: true, proposed_golongan: '', current_basic_override: '', proposed_basic_override: '', ptkp_status: '', tax_category: '', tax_residency: '', tax_period_type: '', tax_payment_scope: '', bpjs_kesehatan: true, bpjs_ketenagakerjaan: true, pph_method: 'gross_up', pph_rate: '', pph_fixed_override: '', notes: '' };
+    return { employee_id: '', name: '', current_golongan: '', current_matrix_type: '', proposed_matrix_type: '', unit: '', department: '', position: '', employment_status: '', employment_type: '', join_date: '', active: true, proposed_golongan: '', current_basic_override: '', proposed_basic_override: '', ptkp_status: '', tax_category: '', tax_residency: '', tax_period_type: '', tax_payment_scope: '', bpjs_kesehatan: true, bpjs_ketenagakerjaan: true, pph_method: 'gross_up', pph_rate: '', pph_fixed_override: '', notes: '' };
   }
   function preview(ws, operation) {
     const result = { workspace: clone(ws), added: 0, updated: 0, unchanged: 0, rejected: 0, issues: [] };

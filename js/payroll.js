@@ -59,7 +59,7 @@
       if (!rule.active) continue;
       const participation = C.bpjsParticipation(rule);
       if (participation === null) continue; // Unidentified active programs are blocked by validation.
-      if (!employee[participation]) continue;
+      if (!C.bpjsEligible(rules, employee, scenario, participation)) continue;
       const rawBasis = rule.basis === 'basic' ? result.basic_salary : rule.basis === 'gross' ? result.gross :
         sum([result.basic_salary, ...earnings.filter(row => row.definition[participation]).map(row => row.amount)]);
       let basis = rawBasis;
