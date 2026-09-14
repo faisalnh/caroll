@@ -4,11 +4,12 @@ Simulator perbandingan payroll berbahasa Indonesia, sepenuhnya lokal tanpa serve
 
 ## Mulai
 
-Buka `index.html` di Google Chrome desktop. Pilih **Coba data contoh**, **Buat workspace baru**, atau **Buka workspace CSV**. Selalu salin seluruh folder saat memindahkan aplikasi.
+Buka `index.html` di Google Chrome desktop, atau gunakan situs GitHub Pages setelah deployment selesai. Pilih **Coba data contoh**, **Buat workspace baru**, atau **Buka workspace CSV**. Selalu salin seluruh folder saat memindahkan aplikasi.
 
 - [Panduan pengguna](docs/USER_GUIDE.md)
 - [Format CSV](docs/CSV_FORMAT.md)
 - [Spesifikasi](SPECIFICATION.md)
+- [Catatan rilis](docs/RELEASES.md)
 - [Workspace contoh fiktif](samples/sample-workspace.csv)
 - [Template impor karyawan](samples/employee-import-template.csv)
 
@@ -22,19 +23,13 @@ Karyawan aktif memerlukan `current_matrix_type`; `proposed_matrix_type` opsional
 
 Kepesertaan BPJS dapat tetap manual per karyawan atau memakai aturan global. BPJS Kesehatan dapat aktif setelah minimum bulan kerja terhadap tanggal acuan masing-masing skenario; BPJS TK dapat dibatasi hanya untuk `employment_type=permanent`. Mode otomatis tidak menebak dari teks status lama maupun klasifikasi pajak.
 
-## Membuat file uji tunggal
+## Deployment GitHub Pages dan rilis
 
-Jalankan dari root repositori:
+`index.html` adalah artefak aplikasi yang dideploy. Workflow [`.github/workflows/deploy-pages.yml`](.github/workflows/deploy-pages.yml) berjalan pada setiap push ke `master` dan menerbitkan hanya `index.html`, `css/`, dan `js/` ke GitHub Pages; `private/`, CSV workspace, tes, dan alat pengembangan tidak ikut terpublikasi.
 
-```sh
-node tools/package.js
-```
+Versi aplikasi di sidebar harus sama dengan tag Git dan catatan pada [`docs/RELEASES.md`](docs/RELEASES.md). Untuk setiap rilis, perbarui versi pada `index.html`, tambahkan catatan detail di `docs/releases/`, commit, buat tag anotasi `vX.Y.Z`, push tag, lalu buat GitHub Release dari tag tersebut. Workspace CSV tetap V1 sampai kontrak impor/ekspor berubah.
 
-Perintah ini menghasilkan `dist/caroll-test-v0.1.0.html`. File tersebut memuat HTML aplikasi, `css/app.css`, `css/print.css`, delapan modul JavaScript dalam urutan yang sama dengan `index.html`, dan data demo fiktif yang memang berada di kode aplikasi. Builder memakai allowlist sumber aplikasi dan tidak membaca `private/`, file CSV, atau workspace payroll nyata. CSP hasil build mengizinkan CSS/JavaScript inline hanya melalui hash SHA-256 yang dihasilkan, serta tetap memakai `connect-src 'none'`.
-
-Versi build terlihat di sidebar agar laporan pengujian dapat menyebut artefak yang tepat. File tunggal ini hanya aplikasi: impor/ekspor CSV tetap sama, tidak ada autosave, dan pengguna tetap harus mengekspor workspace sebelum menutup halaman.
-
-Sebelum membagikan build, buka file hasil langsung melalui `file://` di Chrome desktop dan periksa data demo, impor/ekspor CSV, perhitungan, dialog, serta pratinjau cetak. Pemeriksaan otomatis bundler dapat dijalankan dengan `node --test tests/package.test.js`.
+Sebelum rilis, buka `index.html` melalui `file://` di Chrome desktop dan periksa data demo, impor/ekspor CSV, perhitungan, dialog, serta pratinjau cetak.
 
 ## Batasan penting
 

@@ -172,11 +172,13 @@ test('global BPJS eligibility uses exact tenure dates and permanent status per s
   assert.equal(permanent.proposed.employee_bpjs, 200);
 });
 
-test('matrix adjustments round the final salary exactly and do not mutate', () => {
-  const entries = [{ basic_salary: 1050, note: 'keep' }];
-  assert.deepEqual(C.adjustMatrix(entries, '0.1', 100), [{ basic_salary: 1200, note: 'keep' }]);
-  assert.equal(C.adjustMatrix(entries, '-0.1', 100)[0].basic_salary, 900);
-  assert.equal(entries[0].basic_salary, 1050);
+test('all matrix adjustments round upward to thousands and do not mutate', () => {
+  const entries = [{ basic_salary: 3205440, note: 'keep' }];
+  assert.deepEqual(C.adjustMatrix(entries, '0'), [{ basic_salary: 3206000, note: 'keep' }]);
+  assert.equal(C.adjustMatrix(entries, '0.1')[0].basic_salary, 3526000);
+  assert.equal(C.adjustMatrix(entries, '-0.1')[0].basic_salary, 2885000);
+  assert.equal(C.adjustMatrix([{ basic_salary: 3206000 }], '0')[0].basic_salary, 3206000);
+  assert.equal(entries[0].basic_salary, 3205440);
 });
 test('fixed, manual, percentage basic, deductions, contributions and assignment defaults', () => {
   const ws = workspace();

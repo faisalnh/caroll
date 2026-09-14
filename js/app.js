@@ -481,7 +481,7 @@
     target.addEventListener('change', load); load();
     const error = h('div', { role: 'alert' });
     const form = h('form', {}, h('label', { class: 'field' }, 'Matriks tujuan · ' + (scenario === 'current' ? 'Saat ini' : 'Usulan'), target), fields,
-      h('p', { class: 'muted' }, 'PM1 = gaji awal × (1 + COLA). KMK berikutnya × (1 + indeks KMK). P1 = PM3, M1 = P3, U1 = M3. Masukkan rupiah penuh, bukan ribuan. Pembulatan akhir: Rp ' + ws().globalRules.rounding + '.'),
+      h('p', { class: 'muted' }, 'PM1 = gaji awal × (1 + COLA). KMK berikutnya × (1 + indeks KMK). P1 = PM3, M1 = P3, U1 = M3. Masukkan rupiah penuh, bukan ribuan. Semua hasil dibulatkan ke atas ke ribuan berikutnya (3 digit terakhir 000).'),
       error, h('button', { type: 'submit', class: 'primary' }, 'Pratinjau 300 gaji · KG 1–5'));
     form.addEventListener('submit', event => {
       event.preventDefault();
@@ -494,7 +494,7 @@
           matrixId = 'matrix-' + scenario + '-' + matrixType;
           while (rows('matrices').some(m => m.matrix_id === matrixId)) matrixId += '-2';
         }
-        const generated = C.generateMatrix(settings, scenario, matrixId, ws().globalRules.rounding);
+        const generated = C.generateMatrix(settings, scenario, matrixId);
         const codes = new Set(generated.map(e => e.golongan));
         const existing = rows('matrixEntries').filter(e => e.matrix_id === matrixId && codes.has(e.golongan));
         const preview = U.table(['Golongan', 'Sebelum', 'Sesudah'], generated.map(e => {
@@ -540,16 +540,16 @@
     if (!entries.length) { U.toast('Belum ada entri pada skenario ini.'); return; }
     const groupChecks = h('div', { class: 'check-list' }, unique(entries.map(e => String(e.salary_group))).map(g => h('label', {}, h('input', { type: 'checkbox', name: 'group', value: g, checked: true }), 'Kelompok ' + g)));
     const categoryChecks = h('div', { class: 'check-list' }, unique(entries.map(e => e.professional_category)).map(c => h('label', {}, h('input', { type: 'checkbox', name: 'category', value: c, checked: true }), c)));
-    const schema = [{ key: 'rate', label: 'Penyesuaian (%) — negatif untuk penurunan', type: 'rate', min: -100, required: true, help: '9 berarti naik 9%, -5 berarti turun 5%.' }, U.schemas.globalRules.find(s => s.key === 'rounding')];
-    U.form('Penyesuaian matriks · ' + state.matrixId + ' · ' + state.matrixType + ' · ' + (state.scenario === 'current' ? 'Saat ini' : 'Usulan'), schema, { rounding: ws().globalRules.rounding }, (data, form) => {
+    const schema = [{ key: 'rate', label: 'Penyesuaian (%) — negatif untuk penurunan', type: 'rate', min: -100, required: true, help: '9 berarti naik 9%, -5 berarti turun 5%.' }];
+    U.form('Penyesuaian matriks · ' + state.matrixId + ' · ' + state.matrixType + ' · ' + (state.scenario === 'current' ? 'Saat ini' : 'Usulan'), schema, {}, (data, form) => {
       const selected = name => [...form.querySelectorAll('[name="' + name + '"]:checked')].map(i => i.value);
       const groups = selected('group'), categories = selected('category');
       const matches = entries.filter(e => groups.includes(String(e.salary_group)) && categories.includes(e.professional_category));
       if (!matches.length) throw new Error('Pilih kelompok dan kategori dengan setidaknya satu entri.');
-      const adjusted = C.adjustMatrix(clone(matches), data.rate, data.rounding);
+      const adjusted = C.adjustMatrix(clone(matches), data.rate);
       if (!Array.isArray(adjusted) || adjusted.length !== matches.length) throw new Error('Ketidakcocokan API adjustMatrix: daftar entri tidak sesuai.');
       const preview = U.table(['Golongan', 'Sebelum', 'Sesudah', 'Perubahan'], matches.map((e, i) => [e.golongan, U.amount(e.basic_salary), U.amount(adjusted[i].basic_salary), U.delta(C.change(e.basic_salary, adjusted[i].basic_salary))]));
-      U.confirm('Pratinjau penyesuaian · ' + matches.length + ' entri', h('div', {}, U.notice('Hanya matriks terpilih ' + state.matrixId + ' · ' + state.matrixType + '. Matriks lain dan override karyawan tidak berubah. Belum diterapkan. Periksa nominal dan pembulatan sebelum mengonfirmasi.'), preview), () => {
+      U.confirm('Pratinjau penyesuaian · ' + matches.length + ' entri', h('div', {}, U.notice('Hanya matriks terpilih ' + state.matrixId + ' · ' + state.matrixType + '. Matriks lain dan override karyawan tidak berubah. Semua hasil dibulatkan ke atas ke ribuan berikutnya sehingga 3 digit terakhir 000. Belum diterapkan.'), preview), () => {
         mutate(w => { matches.forEach((e, i) => { w.matrixEntries[rows('matrixEntries').indexOf(e)] = adjusted[i]; }); });
         U.close(); U.toast('Penyesuaian matriks diterapkan.');
       }, 'Terapkan penyesuaian');

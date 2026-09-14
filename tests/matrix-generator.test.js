@@ -16,7 +16,7 @@ test('generator produces 300 canonical unique salaries and exact tier overlaps w
   const salary = code => entries.find(e => e.golongan === code).basic_salary;
   assert.equal(salary('1-PM1'), 1100000);
   assert.equal(salary('1-PM2'), 1166000);
-  assert.equal(salary('1-PM3'), 1235960);
+  assert.equal(salary('1-PM3'), 1236000);
   for (let group = 1; group <= 5; group++) {
     for (const [previous, next] of [['PM', 'P'], ['P', 'M'], ['M', 'U']]) {
       assert.equal(salary(group + '-' + previous + '3'), salary(group + '-' + next + '1'));
@@ -27,12 +27,18 @@ test('generator produces 300 canonical unique salaries and exact tier overlaps w
   assert.deepEqual(input, before);
 });
 
-test('rounding happens only at final salary; zero rates and fractional bases are supported', () => {
+test('all generated matrix salaries round upward to thousands only at the final value', () => {
   const input = settings().map(() => ({ base_salary: '1000.5', cola: '0', kmk_index: '0.06' }));
-  const entries = C.generateMatrix(input, 'current', 'a', 100);
-  assert.equal(entries.find(e => e.golongan === '1-PM3').basic_salary, 1100);
-  const flat = C.generateMatrix(settings().map(() => ({ base_salary: '1000.5', cola: '0', kmk_index: '0' })), 'current', 'a');
-  assert.ok(flat.every(e => e.basic_salary === 1001));
+  for (const scenario of ['current', 'proposed']) {
+    const entries = C.generateMatrix(input, scenario, scenario + '-matrix');
+    assert.equal(entries.find(e => e.golongan === '1-PM1').basic_salary, 2000);
+    assert.equal(entries.find(e => e.golongan === '1-PM3').basic_salary, 2000);
+    assert.ok(entries.every(e => e.basic_salary % 1000 === 0));
+  }
+  const flat = C.generateMatrix(settings().map(() => ({ base_salary: '1000', cola: '0', kmk_index: '0' })), 'current', 'a');
+  assert.ok(flat.every(e => e.basic_salary === 1000));
+  assert.equal(C.roundMatrixSalary(3205440), 3206000);
+  assert.equal(C.roundMatrixSalary(3206000), 3206000);
 });
 
 test('invalid parameters, unsafe money, missing groups and invalid target are rejected', () => {
@@ -52,7 +58,7 @@ test('workspace persists settings and salaries and accepts legacy CSV without se
   const restored = C.csv.importWorkspace(C.csv.exportWorkspace(ws));
   assert.deepEqual(JSON.parse(restored.matrices[0].generator_settings), settings());
   assert.deepEqual(restored.matrixEntries, ws.matrixEntries);
-  assert.equal(C.resolveBasic(restored, { current_golongan: '1-P1', current_matrix_type: 'regular' }, 'current'), 1235960);
+  assert.equal(C.resolveBasic(restored, { current_golongan: '1-P1', current_matrix_type: 'regular' }, 'current'), 1236000);
   const legacyRows = C.csv.parse(C.csv.exportWorkspace(ws)).map(({ generator_settings, ...row }) => row);
   const legacy = C.csv.importWorkspace(C.csv.stringify(legacyRows));
   assert.equal(legacy.matrices[0].generator_settings, '');

@@ -75,9 +75,9 @@ test('component defaults scale the raw input exactly, including dynamic formula 
   assert.equal(U.readForm(form({ calculation_type: 'fixed', default_value: '350' }), schema).default_value, 350);
 });
 
-test('matrix adjustments receive the exact decimal rate at rounding ties', () => {
+test('matrix adjustments receive the exact decimal rate and round upward to thousands', () => {
   const rate = U.percentToRate('0.35');
-  assert.equal(C.adjustMatrix([{ basic_salary: 5000000 }], rate, 1000)[0].basic_salary, 5018000);
+  assert.equal(C.adjustMatrix([{ basic_salary: 5000000 }], rate)[0].basic_salary, 5018000);
 });
 
 test('workspace payroll blockers permit draft confirmation; other previews stay strict', () => {

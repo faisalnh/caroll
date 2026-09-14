@@ -26,6 +26,16 @@
     if (!Number.isSafeInteger(number)) throw new RangeError('Money exceeds safe integer range');
     return number;
   }
+  function roundedUp(numerator, denominator, rounding) {
+    const [step, divisor] = decimal(rounding);
+    if (divisor !== 1n || step <= 0n) throw new RangeError('Rounding must be a positive integer');
+    const base = denominator * step;
+    let units = numerator / base;
+    if (numerator > 0n && numerator % base !== 0n) units += 1n;
+    const number = Number(units * step);
+    if (!Number.isSafeInteger(number)) throw new RangeError('Money exceeds safe integer range');
+    return number;
+  }
   C.roundMoney = function (value, rounding = 1) {
     const [n, d] = decimal(value);
     return rounded(n, d, rounding);
@@ -98,14 +108,18 @@
     }
     return changes;
   };
-  C.adjustMatrix = function (entries, rate, rounding = 1) {
+  C.roundMatrixSalary = function (value) {
+    const [n, d] = decimal(value);
+    return roundedUp(n, d, 1000);
+  };
+  C.adjustMatrix = function (entries, rate) {
     const [n, d] = decimal(rate);
     return entries.map(entry => {
       const [a, b] = decimal(entry.basic_salary);
-      return { ...entry, basic_salary: rounded(a * (d + n), b * d, rounding) };
+      return { ...entry, basic_salary: roundedUp(a * (d + n), b * d, 1000) };
     });
   };
-  C.generateMatrix = function (settings, scenario, matrixId, rounding = 1) {
+  C.generateMatrix = function (settings, scenario, matrixId) {
     if (!['current', 'proposed'].includes(scenario) || !matrixId) throw new Error('Skenario dan identitas matriks wajib diisi.');
     if (!Array.isArray(settings) || settings.length !== 5) throw new Error('Isi parameter KG 1–5.');
     return settings.flatMap((setting, index) => {
@@ -113,8 +127,8 @@
       const [cola, colaD] = decimal(setting.cola);
       const [kmk, kmkD] = decimal(setting.kmk_index);
       if (base <= 0n || cola < 0n || kmk < 0n) throw new Error('Gaji awal harus positif; COLA dan indeks KMK tidak boleh negatif.');
-      // Keep intermediate values exact, like spreadsheet formulas; round only the final salary.
-      const salaries = Array.from({ length: 21 }, (_, step) => rounded(base * (colaD + cola) * (kmkD + kmk) ** BigInt(step), baseD * colaD * kmkD ** BigInt(step), rounding));
+      // Keep intermediate values exact, like spreadsheet formulas; round only each final salary upward to Rp1,000.
+      const salaries = Array.from({ length: 21 }, (_, step) => roundedUp(base * (colaD + cola) * (kmkD + kmk) ** BigInt(step), baseD * colaD * kmkD ** BigInt(step), 1000));
       return ['PM', 'P', 'M', 'U'].flatMap((category, tier) => Array.from({ length: 15 }, (_, level) => ({
         matrix_id: matrixId, scenario, salary_group: String(index + 1), professional_category: category,
         kmk_level: level + 1, golongan: C.golongan(index + 1, category, level + 1),
