@@ -503,6 +503,9 @@ test('invalid legacy PTKP is visible rather than silently replaced by a valid de
 
 test('payroll breakdown action opens dialog without isOverride error and shows override notice when present', () => {
   const workspace = globalThis.Caroll.sampleWorkspace();
+  workspace.componentDefinitions[0] = { ...workspace.componentDefinitions[0], code: 'TUNJ_ANAK', name: 'Tunjangan anak', calculation_type: 'percentage_basic', default_value: '0.05' };
+  workspace.employeeComponents.forEach(assignment => { assignment.component_code = 'TUNJ_ANAK'; assignment.current_value = 505542; assignment.proposed_value = 505542; });
+  workspace.employees[0].ptkp_status = 'K/2';
   const nodes = new Map(['main', 'navigation', 'workspace-name', 'save-status'].map(id => [id, new FakeNode()]));
   const listeners = {};
   let dialogOpened = null;
@@ -531,6 +534,9 @@ test('payroll breakdown action opens dialog without isOverride error and shows o
   assert.ok(dialogOpened);
   assert.match(dialogOpened.title, /Rincian · Demo Employee One/);
   assert.ok(!dialogOpened.body.textContent.includes('OVERRIDE GAJI POKOK'));
+  assert.ok(dialogOpened.body.textContent.includes('Tunjangan anak'));
+  assert.ok(dialogOpened.body.textContent.includes('2 anak'));
+  assert.ok(dialogOpened.body.textContent.includes('Rp'));
 
   // 2. With basic salary override
   workspace.employees[0].current_basic_override = 5000000;

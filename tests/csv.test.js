@@ -76,6 +76,18 @@ test('BPJS eligibility settings and permanent status round-trip while legacy hea
   assert.equal(imported.employees[0].employment_type, '');
 });
 
+test('per-child percentage component round-trips and legacy TUNJ_ANAK percentage is upgraded', () => {
+  const ws = sample();
+  ws.componentDefinitions[0].code = 'TUNJ_ANAK';
+  ws.employeeComponents.forEach(assignment => { assignment.component_code = 'TUNJ_ANAK'; });
+  ws.componentDefinitions[0].calculation_type = 'percentage_basic';
+  ws.componentDefinitions[0].default_value = '0.05';
+  const restored = csv.importWorkspace(csv.exportWorkspace(ws));
+  assert.equal(restored.componentDefinitions[0].calculation_type, 'percentage_basic_per_child');
+  assert.equal(restored.componentDefinitions[0].default_value, 0.05);
+  assert.equal(csv.importWorkspace(csv.exportWorkspace(restored)).componentDefinitions[0].calculation_type, 'percentage_basic_per_child');
+});
+
 test('workspace rejects schema, unknown records/columns, duplicate keys, irrelevant values, references and invalid rules', () => {
   const changes = [
     rows => { rows[0].schema_version = '2'; },
@@ -312,7 +324,7 @@ test('component money rounds exactly while percentage overrides remain fractiona
 });
 
 test('result export flattens core schema, preserves undefined percentages, and blocks errors', () => {
-  const values = { basic_salary: 100, gross: 200, employee_bpjs: 1, employer_bpjs: 2, pph: 3, deductions: 4, take_home_pay: 192, employer_cost: 202 };
+  const values = { basic_salary: 100, child_allowance: 10, gross: 200, employee_bpjs: 1, employer_bpjs: 2, pph: 3, deductions: 4, take_home_pay: 192, employer_cost: 202 };
   const changes = Object.fromEntries(['basic_salary', 'gross', 'take_home_pay', 'employer_cost'].map(k => [k, { amount: 0, percent: null }]));
   const employee = { employee_id: '001', name: 'A, B', unit: 'U', department: 'D', current_golongan: '1-U1', proposed_golongan: '1-U1', current_matrix_type: 'regular', proposed_matrix_type: 'contract_2-x', current: values, proposed: values, changes, issues: [{ severity: 'warning', message: 'Review' }] };
   const result = { employees: [employee], issues: [] };
@@ -320,6 +332,7 @@ test('result export flattens core schema, preserves undefined percentages, and b
   assert.equal(row.current_matrix_type, 'regular');
   assert.equal(row.proposed_matrix_type, 'contract_2-x');
   assert.equal(row.current_basic_salary, '100');
+  assert.equal(row.current_child_allowance, '10');
   assert.equal(row.basic_change_percent, '');
   assert.equal(row.validation_status, 'warning');
   assert.equal(row.employee_id, '001');

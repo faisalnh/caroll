@@ -156,13 +156,14 @@
   }
   function renderComponents(main) {
     main.append(U.heading(...sections.components, U.button('Tetapkan ke karyawan', 'assign', {}, 'primary'), U.button('Tambah komponen', 'edit', { collection: 'componentDefinitions' })));
-    main.append(U.notice('Komponen dihitung ketika ditetapkan kepada karyawan. Nilai penugasan kosong memakai default; nilai 0 adalah override nol. Tarif persentase ditampilkan sebagai persen, disimpan sebagai pecahan desimal.'));
+    main.append(U.notice('Komponen biasa dihitung ketika ditetapkan kepada karyawan. Tipe tunjangan anak berlaku otomatis berdasarkan jumlah anak pada status PTKP; /0 tidak mendapat tunjangan. Nilai penugasan kosong memakai default; nilai 0 adalah override nol. Tarif persentase ditampilkan sebagai persen, disimpan sebagai pecahan desimal.'));
     const direction = { earning: 'Pendapatan', employee_deduction: 'Potongan', employer_contribution: 'Kontribusi pemberi kerja' };
-    const type = { fixed: 'Tetap', manual: 'Manual', percentage_basic: '% pokok', percentage_gross: '% bruto' };
-    main.append(U.panel('Definisi komponen', U.table(['Kode / Nama', 'Kategori', 'Arah', 'Perhitungan', 'Default', 'Berlaku', 'Status', 'Tindakan'], rows('componentDefinitions').map(d => [h('div', {}, h('strong', {}, d.name), h('div', { class: 'muted' }, d.code)), d.category || '—', direction[d.direction] || d.direction, type[d.calculation_type] || d.calculation_type, d.calculation_type.startsWith('percentage') ? U.rateDisplay(d.default_value) : U.amount(d.default_value), [d.applies_current ? 'Saat ini' : '', d.applies_proposed ? 'Usulan' : ''].filter(Boolean).join(' · '), U.badge(d.active ? 'Aktif' : 'Nonaktif'), controls('edit', rows('componentDefinitions').indexOf(d), 'componentDefinitions')]))));
+    const type = { fixed: 'Tetap', manual: 'Manual', percentage_basic: '% pokok', percentage_basic_per_child: '% pokok × anak (PTKP)', percentage_gross: '% bruto' };
+    const isChildAllowance = d => String(d?.code || '').trim().toUpperCase() === 'TUNJ_ANAK' && ['percentage_basic', 'percentage_basic_per_child'].includes(d?.calculation_type);
+    main.append(U.panel('Definisi komponen', U.table(['Kode / Nama', 'Kategori', 'Arah', 'Perhitungan', 'Tarif / Nilai default', 'Berlaku', 'Status', 'Tindakan'], rows('componentDefinitions').map(d => [h('div', {}, h('strong', {}, d.name), h('div', { class: 'muted' }, d.code)), d.category || '—', direction[d.direction] || d.direction, isChildAllowance(d) ? '% pokok × anak (PTKP)' : type[d.calculation_type] || d.calculation_type, d.calculation_type.startsWith('percentage') ? U.rateDisplay(d.default_value) : U.amount(d.default_value), [d.applies_current ? 'Saat ini' : '', d.applies_proposed ? 'Usulan' : ''].filter(Boolean).join(' · '), U.badge(d.active ? 'Aktif' : 'Nonaktif'), controls('edit', rows('componentDefinitions').indexOf(d), 'componentDefinitions')]))));
     main.append(U.panel('Penugasan karyawan', U.table(['Karyawan', 'Komponen', 'Nilai saat ini', 'Nilai usulan', 'Tindakan'], rows('employeeComponents').map((a, index) => {
       const d = rows('componentDefinitions').find(d => d.code === a.component_code);
-      const value = v => v === '' || v === null || v === undefined ? U.badge('Pakai default') : d?.calculation_type.startsWith('percentage') ? U.rateDisplay(v) : U.amount(v);
+      const value = v => isChildAllowance(d) ? h('div', {}, U.badge('Diabaikan · otomatis dari PTKP', 'warning'), v === '' || v === null || v === undefined ? null : U.amount(v)) : v === '' || v === null || v === undefined ? U.badge('Pakai default') : d?.calculation_type.startsWith('percentage') ? U.rateDisplay(v) : U.amount(v);
       return [a.employee_id + ' · ' + (rows('employees').find(e => e.employee_id === a.employee_id)?.name || 'Tidak ditemukan'), a.component_code + ' · ' + (d?.name || 'Tidak ditemukan'), value(a.current_value), value(a.proposed_value), U.actions(U.button('Edit', 'assign', { index }, 'small'), U.button('Hapus', 'delete', { collection: 'employeeComponents', index }, 'small danger'))];
     }))));
   }
@@ -177,7 +178,7 @@
     main.append(U.panel('Kepesertaan BPJS', U.object(Object.fromEntries(bpjsSettings.map(s => [s.label, ws().globalRules[s.key]]))), U.button('Edit aturan kepesertaan', 'edit-rules', {}, 'small')));
     main.append(h('div', { class: 'two-column' }, U.panel('Aturan global', U.object(Object.fromEntries(globalSettings.map(s => [s.label, ws().globalRules[s.key]])))), U.panel('PPh 21 otomatis', h('div', {}, U.object(Object.fromEntries(taxSettings.map(s => [s.label, ws().globalRules[s.key]]))), h('p', { class: 'muted' }, 'Skema PPh dan BPJS ditetapkan terpisah untuk saat ini/usulan pada pengaturan skema pembayaran. Basis iuran tetap sebelum tunjangan BPJS/PPh. Pilih PTKP dan klasifikasi pajak terverifikasi pada karyawan, bulan pajak dan konfirmasi rezim biasa di aturan global, serta tax_program pada BPJS aktif. Nilai tarif, override, basis, dan pembulatan pajak legacy hanya arsip, tidak dipakai.'), U.button('Kelola pengaturan karyawan', 'navigate', { section: 'employees' })))));
   }
-  const metricKeys = ['basic_salary', 'gross', 'employee_bpjs', 'employer_bpjs', 'pph', 'deductions', 'take_home_pay', 'employer_contributions', 'bpjs_allowance', 'tax_allowance', 'employer_tax_cost', 'employer_cost'];
+  const metricKeys = ['basic_salary', 'child_allowance', 'gross', 'employee_bpjs', 'employer_bpjs', 'pph', 'deductions', 'take_home_pay', 'employer_contributions', 'bpjs_allowance', 'tax_allowance', 'employer_tax_cost', 'employer_cost'];
   function resultEmployees(result) {
     const ids = new Set(filteredEmployees().map(e => e.employee_id));
     return result.employees.filter(r => {
@@ -213,7 +214,7 @@
     const visible = resultEmployees(result);
     main.append(h('p', { class: 'muted' }, visible.length + ' dari ' + result.employees.length + ' hasil ditampilkan. Ekspor CSV mencakup seluruh hasil; ringkasan organisasi tidak mengikuti filter.'));
     const headers = ['ID / Nama', 'Unit / Departemen', 'Gol. saat ini', 'Gol. usulan'];
-    for (const key of ['basic_salary', 'gross', 'employee_bpjs', 'employer_bpjs', 'pph', 'deductions', 'take_home_pay', 'employer_cost']) {
+    for (const key of ['basic_salary', 'child_allowance', 'gross', 'employee_bpjs', 'employer_bpjs', 'pph', 'deductions', 'take_home_pay', 'employer_cost']) {
       headers.push(U.labels[key] + ' · saat ini', U.labels[key] + ' · usulan');
       if (['basic_salary', 'gross', 'take_home_pay', 'employer_cost'].includes(key)) headers.push('Δ ' + U.labels[key]);
     }
@@ -221,7 +222,7 @@
     main.append(h('section', { class: 'result-detail' }, U.table(headers, visible.map(r => {
       const e = rows('employees').find(e => e.employee_id === r.employee_id);
       const cells = [h('div', {}, h('strong', {}, r.name), h('div', { class: 'muted' }, r.employee_id)), (r.unit || '—') + ' / ' + (r.department || '—'), r.current_golongan, r.proposed_golongan];
-      for (const key of ['basic_salary', 'gross', 'employee_bpjs', 'employer_bpjs', 'pph', 'deductions', 'take_home_pay', 'employer_cost']) {
+      for (const key of ['basic_salary', 'child_allowance', 'gross', 'employee_bpjs', 'employer_bpjs', 'pph', 'deductions', 'take_home_pay', 'employer_cost']) {
         cells.push(U.amount(r.current[key]), U.amount(r.proposed[key]));
         if (['basic_salary', 'gross', 'take_home_pay', 'employer_cost'].includes(key)) cells.push(U.delta(r.changes[key]));
       }
@@ -326,6 +327,7 @@
         if (rows(collection).some((r, i) => i !== target && r.matrix_id === data.matrix_id && r.golongan === data.golongan)) throw new Error('Golongan tersebut sudah ada pada matriks ini.');
       }
       if (collection === 'componentDefinitions') {
+        if (String(data.code).trim().toUpperCase() === 'TUNJ_ANAK' && data.calculation_type === 'percentage_basic') data.calculation_type = 'percentage_basic_per_child';
         if (!data.calculation_type.startsWith('percentage') && !Number.isSafeInteger(data.default_value)) throw new Error('Nominal komponen harus rupiah bulat yang aman.');
       }
       if (collection === 'bpjsRules' && data.minimum_basis !== '' && data.maximum_basis !== '' && data.minimum_basis > data.maximum_basis) throw new Error('Batas minimum tidak boleh lebih besar dari maksimum.');
@@ -453,7 +455,7 @@
           }); U.close(); U.toast(ids.length + ' penugasan diperbarui.');
         };
         U.confirm('Konfirmasi penugasan', h('div', {}, h('p', {}, ids.length + ' karyawan akan menerima komponen ' + data.component_code + '. Penugasan yang sama akan diperbarui.'), U.object(data)), apply, 'Terapkan penugasan');
-      }, h('div', {}, U.notice('Default komponen: ' + (percentage ? U.rateDisplay(definition.default_value) : U.money(definition.default_value)) + '. Memilih komponen lain akan mengosongkan nilai untuk mencegah perubahan satuan tanpa sengaja.'), U.actions(h('button', { type: 'button', class: 'small', onclick: () => checks.querySelectorAll('input').forEach(i => { i.checked = true; }) }, 'Pilih semua'), h('button', { type: 'button', class: 'small', onclick: () => checks.querySelectorAll('input').forEach(i => { i.checked = false; }) }, 'Kosongkan pilihan')), checks), form => {
+      }, h('div', {}, U.notice('Default komponen: ' + (percentage ? U.rateDisplay(definition.default_value) : U.money(definition.default_value)) + (definition.calculation_type === 'percentage_basic_per_child' ? ' per anak berdasarkan status PTKP. Komponen ini berlaku otomatis dan selalu memakai tarif default; penugasan lama diabaikan.' : '') + '. Memilih komponen lain akan mengosongkan nilai untuk mencegah perubahan satuan tanpa sengaja.'), U.actions(h('button', { type: 'button', class: 'small', onclick: () => checks.querySelectorAll('input').forEach(i => { i.checked = true; }) }, 'Pilih semua'), h('button', { type: 'button', class: 'small', onclick: () => checks.querySelectorAll('input').forEach(i => { i.checked = false; }) }, 'Kosongkan pilihan')), checks), form => {
         form.elements.component_code.addEventListener('change', () => build(form.elements.component_code.value, { ids: [...checks.querySelectorAll('input:checked')].map(i => i.value), current_value: '', proposed_value: '' }));
       });
     };
@@ -617,7 +619,14 @@
     if (!r) return;
     const employee = rows('employees').find(e => e.employee_id === id);
     const hasOverride = hasBasicOverride(employee, 'current') || hasBasicOverride(employee, 'proposed');
-    U.dialog('Rincian · ' + r.name + ' (' + id + ')', h('div', {}, hasOverride ? U.notice('OVERRIDE GAJI POKOK — Gaji pokok menggunakan nilai eksplisit yang mendahului matriks. PPh 21 dihitung otomatis dari penghasilan kena pajak.') : null, U.table(['Ukuran', 'Saat ini', 'Usulan'], metricKeys.map(key => [U.labels[key], U.amount(r.current[key]), U.amount(r.proposed[key])])), U.issues(r.issues), h('div', { class: 'two-column' }, h('section', {}, h('h3', {}, 'Rincian perhitungan saat ini'), U.object(r.current.breakdown)), h('section', {}, h('h3', {}, 'Rincian perhitungan usulan'), U.object(r.proposed.breakdown))), h('details', {}, h('summary', {}, 'Input karyawan & penugasan'), U.object(employee), U.object(rows('employeeComponents').filter(a => a.employee_id === id)))), [U.button('Edit karyawan', 'edit', { collection: 'employees', index: rows('employees').indexOf(employee) }, 'primary')]);
+    const componentRows = [...new Set([...r.current.breakdown, ...r.proposed.breakdown].filter(row => row.direction === 'earning' && !['basic_salary', 'bpjs_allowance', 'tax_allowance'].includes(row.code)).map(row => row.code))].map(code => {
+      const current = r.current.breakdown.find(row => row.code === code);
+      const proposed = r.proposed.breakdown.find(row => row.code === code);
+      const item = current || proposed;
+      const detail = item?.child_count !== undefined ? item.child_count + ' anak × ' + U.money(item.amount_per_child) : item?.rate !== undefined ? U.rateDisplay(item.rate) : U.translate(item?.calculation_type || '—');
+      return [item?.name || code, detail, U.amount(current?.amount || 0), U.amount(proposed?.amount || 0)];
+    });
+    U.dialog('Rincian · ' + r.name + ' (' + id + ')', h('div', {}, hasOverride ? U.notice('OVERRIDE GAJI POKOK — Gaji pokok menggunakan nilai eksplisit yang mendahului matriks. PPh 21 dihitung otomatis dari penghasilan kena pajak.') : null, U.table(['Ukuran', 'Saat ini', 'Usulan'], metricKeys.map(key => [U.labels[key], U.amount(r.current[key]), U.amount(r.proposed[key])])), U.panel('Komponen pendapatan', U.table(['Komponen', 'Perhitungan', 'Saat ini', 'Usulan'], componentRows)), U.issues(r.issues), h('div', { class: 'two-column' }, h('section', {}, h('h3', {}, 'Rincian perhitungan saat ini'), U.object(r.current.breakdown)), h('section', {}, h('h3', {}, 'Rincian perhitungan usulan'), U.object(r.proposed.breakdown))), h('details', {}, h('summary', {}, 'Input karyawan & penugasan'), U.object(employee), U.object(rows('employeeComponents').filter(a => a.employee_id === id)))), [U.button('Edit karyawan', 'edit', { collection: 'employees', index: rows('employees').indexOf(employee) }, 'primary')]);
   }
   const actions = {
     'employee-actions': data => {

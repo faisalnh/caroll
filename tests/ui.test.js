@@ -66,7 +66,7 @@ test('all rate form inputs retain exact strings through repeated edit/save cycle
 
 test('component defaults scale the raw input exactly, including dynamic formula selection', () => {
   const schema = U.schemas.componentDefinitions.filter(s => ['default_value', 'calculation_type'].includes(s.key));
-  for (const calculation_type of ['percentage_basic', 'percentage_gross']) {
+  for (const calculation_type of ['percentage_basic', 'percentage_basic_per_child', 'percentage_gross']) {
     const data = U.readForm(form({ calculation_type, default_value: '0.35' }), schema);
     assert.equal(data.default_value, '0.0035');
     assert.equal(C.percent(5000000, data.default_value, 1000), 18000);

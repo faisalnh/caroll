@@ -94,12 +94,16 @@
     }
     for (const definition of ws.componentDefinitions) {
       choice(definition.direction, ['earning', 'employee_deduction', 'employer_contribution'], 'component direction');
-      choice(definition.calculation_type, ['fixed', 'percentage_basic', 'percentage_gross', 'manual'], 'component formula');
+      choice(definition.calculation_type, ['fixed', 'percentage_basic', 'percentage_basic_per_child', 'percentage_gross', 'manual'], 'component formula');
       numeric(definition.default_value, 'component default ' + definition.code, null, definition.calculation_type === 'manual');
       rounding(definition.rounding, 'component ' + definition.code);
       for (const key of ['taxable', 'bpjs_kesehatan', 'bpjs_ketenagakerjaan', 'applies_current', 'applies_proposed', 'active']) boolean(definition[key], definition.code + '.' + key);
     }
     const definitions = new Map(ws.componentDefinitions.map(definition => [definition.code, definition]));
+    const isChildAllowance = definition => String(definition.code).trim().toUpperCase() === 'TUNJ_ANAK' &&
+      ['percentage_basic', 'percentage_basic_per_child'].includes(definition.calculation_type);
+    const childDefinitions = ws.componentDefinitions.filter(definition => enabled(definition.active) && isChildAllowance(definition));
+    for (const definition of childDefinitions) if (definition.direction !== 'earning') error('Tunjangan anak per PTKP harus berupa pendapatan: ' + definition.code);
     const employees = new Map(ws.employees.map(employee => [employee.employee_id, employee]));
     for (const assignment of ws.employeeComponents) {
       const employee = employees.get(assignment.employee_id);
@@ -134,6 +138,7 @@
       if ((rules.bpjs_ketenagakerjaan_eligibility || 'manual') === 'manual' && !employee.bpjs_ketenagakerjaan) warning('Employee excluded from bpjs_ketenagakerjaan', employee);
       if ((rules.bpjs_kesehatan_eligibility || 'manual') === 'tenure' && !/^\d{4}-\d{2}-\d{2}$/.test(employee.join_date || '')) error('Tanggal bergabung wajib untuk aturan masa kerja BPJS Kesehatan.', employee);
       if ((rules.bpjs_ketenagakerjaan_eligibility || 'manual') === 'permanent') choice(employee.employment_type, ['permanent', 'non_permanent'], 'status permanen BPJS TK', employee);
+      if (childDefinitions.some(definition => enabled(definition.applies_current) || enabled(definition.applies_proposed))) choice(employee.ptkp_status, ['TK/0', 'TK/1', 'TK/2', 'TK/3', 'K/0', 'K/1', 'K/2', 'K/3'], 'status PTKP untuk tunjangan anak', employee);
       if (rules.tax_enabled) {
         choice(employee.tax_category, ['permanent', 'temporary_monthly', 'non_employee'], 'klasifikasi PPh (harian/mingguan/lainnya belum didukung)', employee);
         choice(employee.tax_residency, ['domestic'], 'subjek pajak dalam negeri', employee);

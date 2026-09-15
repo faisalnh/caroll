@@ -130,7 +130,7 @@ Fields: `code!`, `name!`, `category`, `direction!`, `calculation_type!`, `defaul
 
 - `code`: unique component identifier; `name`: display name; `category`: optional classification text.
 - `direction`: `earning`, `employee_deduction`, or `employer_contribution`.
-- `calculation_type`: `fixed`, `percentage_basic`, `percentage_gross`, or `manual`. `percentage_gross` continues to use basic salary plus non-percentage-gross earnings, excluding all percentage-gross components and both BPJS and tax allowances. These components are calculated before either allowance to avoid cycles.
+- `calculation_type`: `fixed`, `percentage_basic`, `percentage_basic_per_child`, `percentage_gross`, or `manual`. `percentage_basic_per_child` calculates `basic_salary × default rate × child count`, where the child count is the `/0`–`/3` suffix of the employee PTKP status; it applies automatically and ignores employee assignment values. For compatibility, imported code `TUNJ_ANAK` with `percentage_basic` is upgraded to `percentage_basic_per_child`. `percentage_gross` continues to use basic salary plus non-percentage-gross earnings, excluding all percentage-gross components and both BPJS and tax allowances. These components are calculated before either allowance to avoid cycles.
 - `default_value`: required numeric value except manual definitions may leave it blank. Money for fixed/manual; decimal fraction for percentage formulas. Signed values are supported.
 - `taxable`: whether included in taxable basis.
 - `bpjs_kesehatan`, `bpjs_ketenagakerjaan`: whether included in the corresponding selected contribution basis (not employee participation on this record type).

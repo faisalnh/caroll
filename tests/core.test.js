@@ -198,6 +198,37 @@ test('fixed, manual, percentage basic, deductions, contributions and assignment 
   ws.employeeComponents = [];
   assert.equal(result(ws).employees[0].current.gross, 10000);
 });
+test('child allowance is percentage of basic per PTKP child and applies without assignment', () => {
+  const ws = workspace(10000000, 12000000);
+  ws.componentDefinitions.push({ code: 'TUNJ_ANAK', name: 'Tunjangan anak', category: 'allowance', direction: 'earning',
+    calculation_type: 'percentage_basic_per_child', default_value: '0.05', taxable: true,
+    bpjs_kesehatan: false, bpjs_ketenagakerjaan: false, applies_current: true, applies_proposed: true,
+    active: true, rounding: 1, notes: '' });
+  for (const [ptkp, currentAmount, proposedAmount, count] of [
+    ['TK/0', 0, 0, 0], ['K/0', 0, 0, 0], ['TK/1', 500000, 600000, 1],
+    ['K/2', 1000000, 1200000, 2], ['K/3', 1500000, 1800000, 3]
+  ]) {
+    ws.employees[0].ptkp_status = ptkp;
+    const row = result(ws).employees[0];
+    const current = row.current.breakdown.find(item => item.code === 'TUNJ_ANAK');
+    assert.equal(current.amount, currentAmount);
+    assert.equal(current.child_count, count);
+    assert.equal(current.amount_per_child, 500000);
+    assert.equal(row.current.child_allowance, currentAmount);
+    assert.equal(row.proposed.child_allowance, proposedAmount);
+    assert.equal(row.current.gross, 10000000 + currentAmount);
+    assert.equal(row.proposed.gross, 12000000 + proposedAmount);
+  }
+  ws.componentDefinitions[0].calculation_type = 'percentage_basic';
+  ws.employeeComponents.push({ employee_id: ws.employees[0].employee_id, component_code: 'TUNJ_ANAK', current_value: 400000, proposed_value: 500000 });
+  ws.employees[0].ptkp_status = 'K/2';
+  const withStaleAssignments = result(ws).employees[0];
+  assert.equal(withStaleAssignments.current.breakdown.find(item => item.code === 'TUNJ_ANAK').amount, 1000000);
+  assert.equal(withStaleAssignments.proposed.breakdown.find(item => item.code === 'TUNJ_ANAK').amount, 1200000);
+  assert.ok(!C.validate(ws).some(issue => /Penugasan komponen diabaikan/.test(issue.message)));
+  ws.employees[0].ptkp_status = '';
+  blocked(ws, /PTKP untuk tunjangan anak/);
+});
 test('percentage gross uses a shared independent earning basis and is order invariant', () => {
   const ws = workspace();
   component(ws, 'FIX', 'earning', 'fixed', 1000);

@@ -528,9 +528,12 @@ Supported component formulas:
 ```text
 fixed_amount = configured rupiah amount
 percentage_of_basic = basic_salary * rate
+percentage_of_basic_per_child = basic_salary * rate * child_count_from_ptkp
 percentage_of_gross_basis = selected gross basis * rate
 manual_amount = employee-specific rupiah amount
 ```
+
+For `percentage_basic_per_child`, `child_count_from_ptkp` is the `/0`–`/3` suffix of `TK/0`–`TK/3` or `K/0`–`K/3`; `/0` produces zero. The definition applies automatically to included employees and always uses its default rate; stale employee assignments are ignored. Existing `TUNJ_ANAK` definitions imported or saved as `percentage_basic` are upgraded to this formula.
 
 Circular formulas are not permitted. `percentage_gross` continues to use basic salary plus non-percentage-gross earnings, excluding all percentage-gross components and both BPJS and tax allowances. Calculate these components and all BPJS contribution bases before either allowance, then the BPJS allowance, then automatic PPh under the scenario policy and any gross-up tax allowance. In the formulas above, `earning_components` excludes both calculated allowances. Reported `gross` is `gross_earnings`, including both allowances.
 

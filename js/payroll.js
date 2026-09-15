@@ -7,7 +7,7 @@
     require('./validation.js');
   }
   const blank = value => value === '' || value === null || value === undefined;
-  const metrics = ['basic_salary', 'gross', 'employee_bpjs', 'employer_bpjs', 'pph', 'deductions',
+  const metrics = ['basic_salary', 'child_allowance', 'gross', 'employee_bpjs', 'employer_bpjs', 'pph', 'deductions',
     'take_home_pay', 'employer_cost', 'employer_contributions', 'bpjs_allowance', 'tax_allowance', 'employer_tax_cost'];
   const compared = ['basic_salary', 'gross', 'take_home_pay', 'employer_cost'];
   const empty = () => Object.fromEntries(metrics.map(key => [key, 0]).concat([['breakdown', []]]));
@@ -27,21 +27,30 @@
     result.basic_salary = C.resolveBasic(ws, employee, scenario);
     breakdown.push({ code: 'basic_salary', name: 'Basic salary', direction: 'earning', amount: result.basic_salary,
       source: blank(employee[scenario + '_basic_override']) ? 'matrix' : 'override', matrix_type: result.matrix_type });
+    const isChildAllowance = definition => String(definition.code).trim().toUpperCase() === 'TUNJ_ANAK' &&
+      ['percentage_basic', 'percentage_basic_per_child'].includes(definition.calculation_type);
     const definitions = new Map(ws.componentDefinitions.map(definition => [definition.code, definition]));
-    const components = ws.employeeComponents.filter(assignment => assignment.employee_id === employee.employee_id)
-      .map(assignment => ({ assignment, definition: definitions.get(assignment.component_code) }))
-      .filter(({ definition }) => definition.active && definition['applies_' + scenario])
+    const assignments = new Map(ws.employeeComponents.filter(assignment => assignment.employee_id === employee.employee_id)
+      .map(assignment => [assignment.component_code, assignment]));
+    const components = ws.componentDefinitions
+      .filter(definition => definition.active && definition['applies_' + scenario] &&
+        (assignments.has(definition.code) || isChildAllowance(definition)))
+      .map(definition => ({ assignment: assignments.get(definition.code) || {}, definition }))
       .sort((a, b) => a.definition.code < b.definition.code ? -1 : a.definition.code > b.definition.code ? 1 : 0);
     function componentAmount(component, grossBasis) {
       const { assignment, definition } = component;
-      const override = assignment[scenario + '_value'];
+      const perChild = isChildAllowance(definition);
+      const override = perChild ? '' : assignment[scenario + '_value'];
       const value = blank(override) ? definition.default_value : override;
       const percentage = definition.calculation_type.startsWith('percentage_');
-      const basis = definition.calculation_type === 'percentage_basic' ? result.basic_salary : grossBasis;
-      const amount = percentage ? C.percent(basis, value, definition.rounding) : C.roundMoney(value, definition.rounding);
+      const basis = definition.calculation_type === 'percentage_basic' || perChild ? result.basic_salary : grossBasis;
+      const childCount = perChild ? Number(String(employee.ptkp_status).match(/^(?:TK|K)\/(\d)$/)?.[1] || 0) : 1;
+      const perChildAmount = percentage ? C.percent(basis, value, definition.rounding) : null;
+      const amount = perChild ? sum(Array.from({ length: childCount }, () => perChildAmount)) : percentage ? perChildAmount : C.roundMoney(value, definition.rounding);
       return { code: definition.code, name: definition.name, direction: definition.direction,
         calculation_type: definition.calculation_type, amount, source: blank(override) ? 'default' : 'assignment',
-        ...(percentage ? { basis, rate: Number(value) } : {}), definition };
+        ...(percentage ? { basis, rate: Number(value) } : {}),
+        ...(perChild ? { child_count: childCount, amount_per_child: perChildAmount, source: 'ptkp_status' } : {}), definition };
     }
     const independent = components.filter(component => component.definition.calculation_type !== 'percentage_gross')
       .map(component => componentAmount(component, 0));
@@ -52,6 +61,7 @@
     calculated.sort((a, b) => a.code < b.code ? -1 : a.code > b.code ? 1 : 0);
     breakdown.push(...calculated.map(({ definition, ...row }) => row));
     const earnings = calculated.filter(row => row.direction === 'earning');
+    result.child_allowance = sum(calculated.filter(row => row.calculation_type === 'percentage_basic_per_child' || String(row.code).trim().toUpperCase() === 'TUNJ_ANAK').map(row => row.amount));
     result.gross = sum([result.basic_salary, ...earnings.map(row => row.amount)]);
     result.employer_contributions = sum(calculated.filter(row => row.direction === 'employer_contribution').map(row => row.amount));
     const employeeContributions = [], employerContributions = [], fundedContributions = [], taxableEmployerContributions = [];

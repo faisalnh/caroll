@@ -16,7 +16,7 @@
   const collections = { matrix: 'matrices', matrix_entry: 'matrixEntries', employee: 'employees', component_definition: 'componentDefinitions', employee_component: 'employeeComponents', bpjs_rule: 'bpjsRules' };
   const workspaceHeaders = ['schema_version', 'record_type', 'record_id', ...new Set(Object.values(fields).flat())];
   const matrixHeaders = 'scenario matrix_type golongan basic_salary matrix_name effective_date salary_group professional_category kmk_level note'.split(' ');
-  const resultHeaders = 'employee_id name unit department current_golongan proposed_golongan current_matrix_type proposed_matrix_type current_basic_salary proposed_basic_salary basic_change basic_change_percent current_gross proposed_gross gross_change gross_change_percent current_employee_bpjs proposed_employee_bpjs current_employer_bpjs proposed_employer_bpjs current_pph proposed_pph current_deductions proposed_deductions current_take_home_pay proposed_take_home_pay thp_change thp_change_percent current_employer_cost proposed_employer_cost employer_cost_change validation_status'.split(' ');
+  const resultHeaders = 'employee_id name unit department current_golongan proposed_golongan current_matrix_type proposed_matrix_type current_basic_salary proposed_basic_salary basic_change basic_change_percent current_child_allowance proposed_child_allowance current_gross proposed_gross gross_change gross_change_percent current_employee_bpjs proposed_employee_bpjs current_employer_bpjs proposed_employer_bpjs current_pph proposed_pph current_deductions proposed_deductions current_take_home_pay proposed_take_home_pay thp_change thp_change_percent current_employer_cost proposed_employer_cost employer_cost_change validation_status'.split(' ');
   const booleanFields = new Set('active taxable bpjs_kesehatan bpjs_ketenagakerjaan applies_current applies_proposed employee_enabled employer_enabled include_inactive allow_negative_thp proposed_defaults_current proposed_matrix_type_defaults_current tax_enabled'.split(' '));
   const moneyFields = new Set('basic_salary current_basic_override proposed_basic_override pph_fixed_override minimum_basis maximum_basis'.split(' '));
   const numberFields = new Set('default_value current_value proposed_value employee_rate employer_rate pph_rate'.split(' '));
@@ -37,7 +37,7 @@
     ...C.paymentPolicies,
     scenario: ['current', 'proposed'],
     direction: ['earning', 'employee_deduction', 'employer_contribution'],
-    calculation_type: ['fixed', 'percentage_basic', 'percentage_gross', 'manual'],
+    calculation_type: ['fixed', 'percentage_basic', 'percentage_basic_per_child', 'percentage_gross', 'manual'],
     basis: ['basic', 'selected', 'gross'],
     pph_method: ['gross', 'net', 'gross_up'],
         currency: ['IDR'],
@@ -171,6 +171,7 @@
       }
       if (required[type].includes(field) && (blank(record[field]) || (typeof record[field] === 'string' && !record[field].trim()))) fail(`${type}.${field} is required.`);
     }
+    if (type === 'component_definition' && String(record.code).toUpperCase() === 'TUNJ_ANAK' && record.calculation_type === 'percentage_basic') record.calculation_type = 'percentage_basic_per_child';
     return record;
   }
   function identity(type, r, ws) {
@@ -411,7 +412,7 @@
         if (type === null) fail(`Invalid or missing result ${field}.`);
         row[field] = type;
       }
-      for (const metric of ['basic_salary', 'gross', 'employee_bpjs', 'employer_bpjs', 'pph', 'deductions', 'take_home_pay', 'employer_cost']) {
+      for (const metric of ['basic_salary', 'child_allowance', 'gross', 'employee_bpjs', 'employer_bpjs', 'pph', 'deductions', 'take_home_pay', 'employer_cost']) {
         for (const scenario of enums.scenario) {
           const value = employee[scenario] && employee[scenario][metric];
           if (blank(value)) fail(`Missing result metric ${scenario}.${metric}.`);
