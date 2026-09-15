@@ -40,9 +40,11 @@
     function componentAmount(component, grossBasis) {
       const { assignment, definition } = component;
       const perChild = isChildAllowance(definition);
-      const override = perChild ? '' : assignment[scenario + '_value'];
-      const value = blank(override) ? definition.default_value : override;
       const percentage = definition.calculation_type.startsWith('percentage_');
+      const assigned = assignment[scenario + '_value'];
+      const legacyMoneyAssignment = percentage && !blank(assigned) && Math.abs(Number(assigned)) > 1;
+      const override = perChild || legacyMoneyAssignment ? '' : assigned;
+      const value = blank(override) ? definition.default_value : override;
       const basis = definition.calculation_type === 'percentage_basic' || perChild ? result.basic_salary : grossBasis;
       const childCount = perChild ? Number(String(employee.ptkp_status).match(/^(?:TK|K)\/(\d)$/)?.[1] || 0) : 1;
       const perChildAmount = percentage ? C.percent(basis, value, definition.rounding) : null;
@@ -50,6 +52,7 @@
       return { code: definition.code, name: definition.name, direction: definition.direction,
         calculation_type: definition.calculation_type, amount, source: blank(override) ? 'default' : 'assignment',
         ...(percentage ? { basis, rate: Number(value) } : {}),
+        ...(legacyMoneyAssignment ? { legacy_assignment_ignored: Number(assigned) } : {}),
         ...(perChild ? { child_count: childCount, amount_per_child: perChildAmount, source: 'ptkp_status' } : {}), definition };
     }
     const independent = components.filter(component => component.definition.calculation_type !== 'percentage_gross')

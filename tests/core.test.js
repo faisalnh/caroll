@@ -198,6 +198,20 @@ test('fixed, manual, percentage basic, deductions, contributions and assignment 
   ws.employeeComponents = [];
   assert.equal(result(ws).employees[0].current.gross, 10000);
 });
+test('percentage components ignore stale rupiah assignments and retain valid rate overrides', () => {
+  const ws = workspace(10000000, 12000000);
+  component(ws, 'TUNJ_PASANGAN', 'earning', 'percentage_basic', '0.05', {}, { current_value: 505542, proposed_value: '0.04' });
+  const row = result(ws).employees[0];
+  const current = row.current.breakdown.find(item => item.code === 'TUNJ_PASANGAN');
+  const proposed = row.proposed.breakdown.find(item => item.code === 'TUNJ_PASANGAN');
+  assert.equal(current.amount, 500000);
+  assert.equal(current.rate, 0.05);
+  assert.equal(current.source, 'default');
+  assert.equal(current.legacy_assignment_ignored, 505542);
+  assert.equal(proposed.amount, 480000);
+  assert.equal(proposed.rate, 0.04);
+  assert.equal(proposed.source, 'assignment');
+});
 test('child allowance is percentage of basic per PTKP child and applies without assignment', () => {
   const ws = workspace(10000000, 12000000);
   ws.componentDefinitions.push({ code: 'TUNJ_ANAK', name: 'Tunjangan anak', category: 'allowance', direction: 'earning',

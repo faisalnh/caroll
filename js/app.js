@@ -160,10 +160,11 @@
     const direction = { earning: 'Pendapatan', employee_deduction: 'Potongan', employer_contribution: 'Kontribusi pemberi kerja' };
     const type = { fixed: 'Tetap', manual: 'Manual', percentage_basic: '% pokok', percentage_basic_per_child: '% pokok × anak (PTKP)', percentage_gross: '% bruto' };
     const isChildAllowance = d => String(d?.code || '').trim().toUpperCase() === 'TUNJ_ANAK' && ['percentage_basic', 'percentage_basic_per_child'].includes(d?.calculation_type);
+    const isLegacyMoneyAssignment = (d, value) => d?.calculation_type.startsWith('percentage') && value !== '' && value !== null && value !== undefined && Math.abs(Number(value)) > 1;
     main.append(U.panel('Definisi komponen', U.table(['Kode / Nama', 'Kategori', 'Arah', 'Perhitungan', 'Tarif / Nilai default', 'Berlaku', 'Status', 'Tindakan'], rows('componentDefinitions').map(d => [h('div', {}, h('strong', {}, d.name), h('div', { class: 'muted' }, d.code)), d.category || '—', direction[d.direction] || d.direction, isChildAllowance(d) ? '% pokok × anak (PTKP)' : type[d.calculation_type] || d.calculation_type, d.calculation_type.startsWith('percentage') ? U.rateDisplay(d.default_value) : U.amount(d.default_value), [d.applies_current ? 'Saat ini' : '', d.applies_proposed ? 'Usulan' : ''].filter(Boolean).join(' · '), U.badge(d.active ? 'Aktif' : 'Nonaktif'), controls('edit', rows('componentDefinitions').indexOf(d), 'componentDefinitions')]))));
     main.append(U.panel('Penugasan karyawan', U.table(['Karyawan', 'Komponen', 'Nilai saat ini', 'Nilai usulan', 'Tindakan'], rows('employeeComponents').map((a, index) => {
       const d = rows('componentDefinitions').find(d => d.code === a.component_code);
-      const value = v => isChildAllowance(d) ? h('div', {}, U.badge('Diabaikan · otomatis dari PTKP', 'warning'), v === '' || v === null || v === undefined ? null : U.amount(v)) : v === '' || v === null || v === undefined ? U.badge('Pakai default') : d?.calculation_type.startsWith('percentage') ? U.rateDisplay(v) : U.amount(v);
+      const value = v => isChildAllowance(d) ? h('div', {}, U.badge('Diabaikan · otomatis dari PTKP', 'warning'), v === '' || v === null || v === undefined ? null : U.amount(v)) : isLegacyMoneyAssignment(d, v) ? h('div', {}, U.badge('Nilai Rp lama diabaikan · pakai tarif default', 'warning'), U.amount(v)) : v === '' || v === null || v === undefined ? U.badge('Pakai default') : d?.calculation_type.startsWith('percentage') ? U.rateDisplay(v) : U.amount(v);
       return [a.employee_id + ' · ' + (rows('employees').find(e => e.employee_id === a.employee_id)?.name || 'Tidak ditemukan'), a.component_code + ' · ' + (d?.name || 'Tidak ditemukan'), value(a.current_value), value(a.proposed_value), U.actions(U.button('Edit', 'assign', { index }, 'small'), U.button('Hapus', 'delete', { collection: 'employeeComponents', index }, 'small danger'))];
     }))));
   }
@@ -326,9 +327,11 @@
         data.scenario = rows('matrices').find(m => m.matrix_id === data.matrix_id).scenario;
         if (rows(collection).some((r, i) => i !== target && r.matrix_id === data.matrix_id && r.golongan === data.golongan)) throw new Error('Golongan tersebut sudah ada pada matriks ini.');
       }
+      let componentUnitChanged = false;
       if (collection === 'componentDefinitions') {
         if (String(data.code).trim().toUpperCase() === 'TUNJ_ANAK' && data.calculation_type === 'percentage_basic') data.calculation_type = 'percentage_basic_per_child';
         if (!data.calculation_type.startsWith('percentage') && !Number.isSafeInteger(data.default_value)) throw new Error('Nominal komponen harus rupiah bulat yang aman.');
+        componentUnitChanged = Boolean(existing && existing.calculation_type.startsWith('percentage') !== data.calculation_type.startsWith('percentage'));
       }
       if (collection === 'bpjsRules' && data.minimum_basis !== '' && data.maximum_basis !== '' && data.minimum_basis > data.maximum_basis) throw new Error('Batas minimum tidak boleh lebih besar dari maksimum.');
       if (collection === 'matrices' && existing?.generator_settings) data.generator_settings = existing.generator_settings;
@@ -337,13 +340,17 @@
           if (target >= 0) w[collection][target] = data; else w[collection].push(data);
           if (collection === 'matrices') { state.scenario = data.scenario; state.matrixType = data.matrix_type; state.matrixId = data.matrix_id; }
           if (existing && !duplicate && collection === 'employees') w.employeeComponents.forEach(a => { if (a.employee_id === existing.employee_id) a.employee_id = data.employee_id; });
-          if (existing && collection === 'componentDefinitions') w.employeeComponents.forEach(a => { if (a.component_code === existing.code) a.component_code = data.code; });
+          if (existing && collection === 'componentDefinitions') w.employeeComponents.forEach(a => {
+            if (a.component_code !== existing.code) return;
+            a.component_code = data.code;
+            if (componentUnitChanged) { a.current_value = ''; a.proposed_value = ''; }
+          });
           if (existing && collection === 'matrices') w.matrixEntries.forEach(e => { if (e.matrix_id === existing.matrix_id) { e.matrix_id = data.matrix_id; e.scenario = data.scenario; } });
         });
         U.close(); U.toast('Data disimpan di layar. Ekspor workspace untuk menyimpan file.');
       };
       if (existing && collection === 'matrices' && (data.scenario !== existing.scenario || data.matrix_type !== existing.matrix_type)) U.confirm('Ubah skenario / jenis matriks?', h('p', {}, 'Seluruh entri matriks ini mengikuti identitas yang diubah. Jenis karyawan dan override tidak diubah; periksa kembali resolusi gaji setelah perubahan.'), commit);
-      else if (existing && collection === 'componentDefinitions' && existing.calculation_type.startsWith('percentage') !== data.calculation_type.startsWith('percentage') && rows('employeeComponents').some(a => a.component_code === existing.code)) U.confirm('Ubah satuan komponen?', h('p', {}, 'Nilai penugasan yang sudah ada tidak dikonversi otomatis. Perubahan antara rupiah dan persen mengubah maknanya; tinjau semua penugasan setelah menyimpan.'), commit);
+      else if (componentUnitChanged && rows('employeeComponents').some(a => a.component_code === existing.code)) U.confirm('Ubah satuan komponen?', h('p', {}, 'Perubahan antara rupiah dan persen mengubah makna semua nilai penugasan. Nilai saat ini dan usulan untuk komponen ini akan dikosongkan agar memakai default baru dan tidak salah dibaca sebagai persen atau rupiah.'), commit, 'Ubah dan kosongkan penugasan');
       else commit();
     }, extra, form => {
       if (collection === 'employees') {
@@ -440,7 +447,8 @@
       const selected = existing ? [existing.employee_id] : values.ids || [];
       const checks = h('div', { class: 'check-list' }, rows('employees').map(e => h('label', {}, h('input', { type: 'checkbox', name: 'selected_employee', value: e.employee_id, checked: selected.includes(e.employee_id) }), e.employee_id + ' · ' + e.name)));
       const schema = [{ key: 'component_code', label: 'Komponen', type: 'select', options: rows('componentDefinitions').map(d => [d.code, d.code + ' · ' + d.name]) }, ...['current', 'proposed'].map(s => ({ key: s + '_value', label: 'Nilai ' + (s === 'current' ? 'saat ini' : 'usulan') + (percentage ? ' (%)' : ' (Rp)'), type: percentage ? 'rate' : 'number', step: percentage ? 'any' : 1, optional: true, help: 'Kosong = default komponen. 0 = override nol.' }))];
-      const record = { component_code: code, current_value: values.current_value ?? existing?.current_value ?? '', proposed_value: values.proposed_value ?? existing?.proposed_value ?? '' };
+      const normalizeAssignedValue = value => percentage && value !== '' && value !== null && value !== undefined && Math.abs(Number(value)) > 1 ? '' : value;
+      const record = { component_code: code, current_value: normalizeAssignedValue(values.current_value ?? existing?.current_value ?? ''), proposed_value: normalizeAssignedValue(values.proposed_value ?? existing?.proposed_value ?? '') };
       U.form(existing ? 'Edit penugasan komponen' : 'Tetapkan komponen ke karyawan', schema, record, (data, form) => {
         const ids = [...form.querySelectorAll('[name="selected_employee"]:checked')].map(input => input.value);
         if (!ids.length) throw new Error('Pilih paling sedikit satu karyawan.');
@@ -455,7 +463,7 @@
           }); U.close(); U.toast(ids.length + ' penugasan diperbarui.');
         };
         U.confirm('Konfirmasi penugasan', h('div', {}, h('p', {}, ids.length + ' karyawan akan menerima komponen ' + data.component_code + '. Penugasan yang sama akan diperbarui.'), U.object(data)), apply, 'Terapkan penugasan');
-      }, h('div', {}, U.notice('Default komponen: ' + (percentage ? U.rateDisplay(definition.default_value) : U.money(definition.default_value)) + (definition.calculation_type === 'percentage_basic_per_child' ? ' per anak berdasarkan status PTKP. Komponen ini berlaku otomatis dan selalu memakai tarif default; penugasan lama diabaikan.' : '') + '. Memilih komponen lain akan mengosongkan nilai untuk mencegah perubahan satuan tanpa sengaja.'), U.actions(h('button', { type: 'button', class: 'small', onclick: () => checks.querySelectorAll('input').forEach(i => { i.checked = true; }) }, 'Pilih semua'), h('button', { type: 'button', class: 'small', onclick: () => checks.querySelectorAll('input').forEach(i => { i.checked = false; }) }, 'Kosongkan pilihan')), checks), form => {
+      }, h('div', {}, U.notice('Default komponen: ' + (percentage ? U.rateDisplay(definition.default_value) : U.money(definition.default_value)) + (definition.calculation_type === 'percentage_basic_per_child' ? ' per anak berdasarkan status PTKP. Komponen ini berlaku otomatis dan selalu memakai tarif default; penugasan lama diabaikan.' : percentage && existing && [existing.current_value, existing.proposed_value].some(value => value !== '' && value !== null && value !== undefined && Math.abs(Number(value)) > 1) ? '. Nilai rupiah dari formula lama tidak dimuat sebagai persen; kosong memakai tarif default.' : '') + '. Memilih komponen lain akan mengosongkan nilai untuk mencegah perubahan satuan tanpa sengaja.'), U.actions(h('button', { type: 'button', class: 'small', onclick: () => checks.querySelectorAll('input').forEach(i => { i.checked = true; }) }, 'Pilih semua'), h('button', { type: 'button', class: 'small', onclick: () => checks.querySelectorAll('input').forEach(i => { i.checked = false; }) }, 'Kosongkan pilihan')), checks), form => {
         form.elements.component_code.addEventListener('change', () => build(form.elements.component_code.value, { ids: [...checks.querySelectorAll('input:checked')].map(i => i.value), current_value: '', proposed_value: '' }));
       });
     };

@@ -161,6 +161,36 @@ test('employee validation is summarized, expands scoped issues and links to repa
   assert.equal(tags(dialog.body, 'li').length, 3);
 });
 
+test('changing any component between rupiah and percentage clears all incompatible assignments after confirmation', () => {
+  const workspace = globalThis.Caroll.sampleWorkspace();
+  workspace.employeeComponents.forEach((assignment, index) => { assignment.current_value = 250000 + index; assignment.proposed_value = 300000 + index; });
+  const nodes = new Map(['main', 'navigation', 'workspace-name', 'save-status'].map(id => [id, new FakeNode()]));
+  const listeners = {};
+  const capture = { workspace };
+  const ui = {
+    ...U,
+    toast() {}, close() {},
+    confirm(title, body, callback) {
+      if (/Coba data contoh/.test(title)) callback();
+      else capture.confirm = { title, body, callback };
+    },
+    form(title, schema, record, save) { capture.form = { title, schema, record, save }; }
+  };
+  const C = { ...globalThis.Caroll, ui, sampleWorkspace: () => workspace, validate(w) { capture.workspace = w; return []; }, csv: Object.fromEntries(['parse', 'stringify', 'exportWorkspace', 'importWorkspace', 'exportEmployees', 'previewEmployees', 'previewMatrix', 'exportMatrix', 'exportResults'].map(key => [key, () => {}])) };
+  const document = { ...globalThis.document, getElementById: id => nodes.get(id), querySelector: () => new FakeNode(), addEventListener: (name, handler) => { listeners[name] = handler; } };
+  vm.runInNewContext(fs.readFileSync(require.resolve('../js/app.js'), 'utf8'), { Caroll: C, document, window: { addEventListener() {} }, console });
+  const click = dataset => listeners.click({ target: { closest: () => ({ dataset }) } });
+  click({ action: 'sample' });
+  click({ action: 'edit', collection: 'componentDefinitions', index: '0' });
+  capture.form.save({ ...capture.form.record, calculation_type: 'percentage_basic', default_value: '0.05' });
+  assert.match(capture.confirm.title, /Ubah satuan komponen/);
+  assert.ok(capture.confirm.body.textContent.includes('akan dikosongkan'));
+  assert.ok(capture.workspace.employeeComponents.every(assignment => assignment.current_value !== '' && assignment.proposed_value !== ''));
+  capture.confirm.callback();
+  assert.equal(capture.workspace.componentDefinitions[0].calculation_type, 'percentage_basic');
+  assert.ok(capture.workspace.employeeComponents.every(assignment => assignment.current_value === '' && assignment.proposed_value === ''));
+});
+
 test('employee editing preserves inert legacy tax data without manual controls or badges', () => {
   const workspace = globalThis.Caroll.sampleWorkspace();
   Object.assign(workspace.employees[0], { pph_rate: '0.123456789', pph_fixed_override: 123456, pph_method: 'net' });
